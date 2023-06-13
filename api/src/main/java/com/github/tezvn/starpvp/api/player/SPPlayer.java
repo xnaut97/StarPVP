@@ -1,5 +1,6 @@
 package com.github.tezvn.starpvp.api.player;
 
+import com.github.tezvn.starpvp.api.rank.SPRank;
 import org.bukkit.OfflinePlayer;
 
 public interface SPPlayer {
@@ -12,10 +13,10 @@ public interface SPPlayer {
 
     SPRank getRank();
 
-    void setRank(RankTier rank, int level);
+    void setRank(SPRank rank);
+
+    void setRank(SPRank rank, boolean resetSP);
 
     long getStatistic(PlayerStatistic statistic);
-
-    void setStatistic(PlayerStatistic statistic, long value);
 
 }
