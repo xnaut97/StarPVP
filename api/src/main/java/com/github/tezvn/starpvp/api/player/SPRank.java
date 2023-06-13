@@ -10,4 +10,6 @@ public interface SPRank {
 
     boolean demote();
 
+    boolean demote(boolean resetSP);
+
 }

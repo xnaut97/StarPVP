@@ -40,12 +40,13 @@ public class SPRankImpl implements SPRank {
 
     @Override
     public boolean promote() {
-        if (getPlayer().getStarPoint() < getSPToPromote())
+        if (getTier().isHighest() || getPlayer().getStarPoint() < getSPToPromote())
             return false;
         getPlayer().setStarPoint(getPlayer().getStarPoint() - getSPToPromote());
         this.level+=1;
         if(getLevel() > getMaxLevel()) {
-            this.level = 1;
+            if(this.tier.ordinal() < 5)
+                this.level = 1;
             this.tier = tier.getNext();
         }
         return promote();
@@ -53,6 +54,16 @@ public class SPRankImpl implements SPRank {
 
     @Override
     public boolean demote() {
+        return demote(false);
+    }
+
+    @Override
+    public boolean demote(boolean resetSP) {
+        if(getTier().isLowest())
+            return false;
+        if(resetSP)
+            getPlayer().setStarPoint(0);
+
         return false;
     }
 

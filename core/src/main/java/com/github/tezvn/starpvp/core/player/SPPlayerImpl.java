@@ -39,17 +39,6 @@ public class SPPlayerImpl implements SPPlayer {
 
     @Override
     public void setStarPoint(long starPoint) {
-        SPPlugin plugin = JavaPlugin.getPlugin(SPPluginImpl.class);
-        FileConfiguration config = plugin.getConfig();
-        long maxLevel = config.getLong("max-level");
-        long spToUpgrade = config.getLong("sp-to-upgrade");
-        if(starPoint - spToUpgrade > 0) {
-            this.setRank(getRank().getTier(), getRank().getLevel()+1);
-            if(this.getRank().getLevel() >= maxLevel)
-                this.rank = this.rank.getNext();
-            setStarPoint(starPoint - spToUpgrade);
-            return;
-        }
         this.starPoint = starPoint;
     }
 

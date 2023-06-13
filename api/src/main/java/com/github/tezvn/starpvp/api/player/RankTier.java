@@ -16,4 +16,12 @@ public enum RankTier {
     public RankTier getPrevious() {
         return RankTier.values()[Math.max(0, this.ordinal()-1)];
     }
+
+    public boolean isHighest() {
+        return this.ordinal() == RankTier.values().length-1;
+    }
+
+    public boolean isLowest() {
+        return this.ordinal() == 0;
+    }
 }
