@@ -19,6 +19,10 @@ public class MathUtils {
 	public static double roundDouble(double amount, int scale) {
 		return new BigDecimal(amount).setScale(scale, RoundingMode.HALF_UP).doubleValue();
 	}
+
+	public static int roundUp(double amount) {
+		return new BigDecimal(amount).setScale(2, RoundingMode.FLOOR).intValue();
+	}
 	
 	public static int parseInt(String str) {
 		try {

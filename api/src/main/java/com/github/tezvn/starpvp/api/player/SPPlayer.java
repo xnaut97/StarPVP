@@ -19,4 +19,5 @@ public interface SPPlayer {
 
     long getStatistic(PlayerStatistic statistic);
 
+    void setStatistic(PlayerStatistic statistic, long value);
 }

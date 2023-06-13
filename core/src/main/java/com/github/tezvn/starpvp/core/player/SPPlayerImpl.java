@@ -9,7 +9,6 @@ import com.google.common.collect.Maps;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Arrays;
 import java.util.Map;
 
 public class SPPlayerImpl implements SPPlayer {
@@ -44,12 +43,21 @@ public class SPPlayerImpl implements SPPlayer {
     public void setStarPoint(long starPoint) {
         long offsetPoint = starPoint - this.starPoint;
         if(offsetPoint > 0) {
-            double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
-                    (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-            if(deathPercent >= getHellPercent())
-                starPoint *= getHellMultiplier();
+            long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
+            long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
+            if(deathCount > killCount) {
+                double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
+                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
+                if (deathPercent >= getPercent("hell-sp.activate"))
+                    offsetPoint *= getMultiplier("hell-sp.multiplier");
+            }else {
+                double killPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.KILL_COUNT),
+                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
+                if(killPercent >= getPercent("high-sp.activate"))
+                    offsetPoint += (offsetPoint*getMultiplier("high-sp.multiplier"));
+            }
         }
-        this.starPoint = starPoint;
+        this.starPoint += offsetPoint;
         if (this.starPoint > 0) {
             long offset = this.rank.getNext().getSP() - this.rank.getSP();
             if (this.starPoint - offset >= 0) {
@@ -88,15 +96,16 @@ public class SPPlayerImpl implements SPPlayer {
         return this.statistic.getOrDefault(statistic, 0L);
     }
 
+    @Override
     public void setStatistic(PlayerStatistic statistic, long value) {
         if (statistic == PlayerStatistic.TOTAL_COMBAT_TIMES)
             return;
         this.statistic.put(statistic, Math.max(0, value));
     }
 
-    private double getHellPercent() {
+    private double getPercent(String key) {
         String str = JavaPlugin.getPlugin(SPPluginImpl.class).getConfig()
-                .getString("hell-sp.activate", "60%");
+                .getString(key, "60%");
         try {
             return MathUtils.roundDouble((double) Integer.parseInt(str) / 100);
         }catch (Exception e) {
@@ -104,9 +113,9 @@ public class SPPlayerImpl implements SPPlayer {
         }
     }
 
-    private double getHellMultiplier() {
+    private double getMultiplier(String key) {
         String str = JavaPlugin.getPlugin(SPPluginImpl.class).getConfig()
-                .getString("hell-sp.multiplier", "35%");
+                .getString(key, "35%");
         try {
             int value = Integer.parseInt(str);
             return MathUtils.roundDouble(1 - ((double) value /100), 2);
