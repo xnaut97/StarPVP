@@ -6,14 +6,16 @@ import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.utils.MathUtils;
 import com.google.common.collect.Maps;
+import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Map;
+import java.util.UUID;
 
 public class SPPlayerImpl implements SPPlayer {
 
-    private final OfflinePlayer player;
+    private final UUID uniqueId;
 
     private SPRank rank;
 
@@ -21,17 +23,26 @@ public class SPPlayerImpl implements SPPlayer {
 
     private long rankPoint;
 
+    private int penaltyTimes;
+
+    private boolean isPenalty;
+
     private final Map<PlayerStatistic, Long> statistic = Maps.newHashMap();
 
     public SPPlayerImpl(OfflinePlayer player) {
-        this.player = player;
+        this.uniqueId = player.getUniqueId();
         this.rank = SPRank.COAL;
         this.rankPoint = getRank().getSP();
     }
 
     @Override
+    public UUID getUniqueId() {
+        return uniqueId;
+    }
+
+    @Override
     public OfflinePlayer getPlayer() {
-        return this.player;
+        return Bukkit.getOfflinePlayer(this.getUniqueId());
     }
 
     @Override
@@ -103,8 +114,28 @@ public class SPPlayerImpl implements SPPlayer {
         this.statistic.put(statistic, Math.max(0, value));
     }
 
+    @Override
+    public long getPenaltyTimes() {
+        return this.penaltyTimes;
+    }
+
+    @Override
+    public boolean isPenalty() {
+        return isPenalty;
+    }
+
+    public void enterCombatLogout() {
+        if(this.isPenalty())
+            return;
+        this.penaltyTimes +=1;
+    }
+
+    public void leaveCombatLogOut() {
+        this.isPenalty = false;
+    }
+
     private double getPercent(String key) {
-        String str = JavaPlugin.getPlugin(SPPluginImpl.class).getConfig()
+        String str = JavaPlugin.getPlugin(SPPluginImpl.class).getDocument()
                 .getString(key, "60%");
         try {
             return MathUtils.roundDouble((double) Integer.parseInt(str) / 100);
@@ -114,7 +145,7 @@ public class SPPlayerImpl implements SPPlayer {
     }
 
     private double getMultiplier(String key) {
-        String str = JavaPlugin.getPlugin(SPPluginImpl.class).getConfig()
+        String str = JavaPlugin.getPlugin(SPPluginImpl.class).getDocument()
                 .getString(key, "35%");
         try {
             int value = Integer.parseInt(str);
@@ -124,4 +155,16 @@ public class SPPlayerImpl implements SPPlayer {
         }
     }
 
+    @Override
+    public Map<String, Object> serialize() {
+        Map<String, Object> map = Maps.newHashMap();
+        map.put("uuid", getUniqueId().toString());
+        map.put("rank", getRank().name());
+        map.put("sp.total", this.getStarPoint());
+        map.put("sp.current", this.starPoint);
+        map.put("combat-logout.times", getPenaltyTimes());
+        map.put("combat-logout.penalty", this.isPenalty());
+
+        return map;
+    }
 }

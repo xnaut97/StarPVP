@@ -6,27 +6,32 @@ import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.CombatCooldown;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
+import com.github.tezvn.starpvp.core.handler.AbstractHandler;
+import com.github.tezvn.starpvp.core.handler.CombatHandler;
+import com.github.tezvn.starpvp.core.handler.CooldownHandler;
+import com.github.tezvn.starpvp.core.handler.PenaltyHandler;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
 import com.github.tezvn.starpvp.core.utils.WGUtils;
 import com.github.tezvn.starpvp.core.utils.time.TimeUnits;
 import com.github.tezvn.starpvp.core.utils.time.TimeUtils;
 import com.google.common.collect.Maps;
-import com.sk89q.worldguard.protection.flags.Flags;
-import com.sk89q.worldguard.protection.flags.StateFlag;
-import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
-import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.event.player.*;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
+
+import static com.github.tezvn.starpvp.core.handler.AbstractHandler.*;
 
 public class PlayerManagerImpl implements PlayerManager, Listener {
 
@@ -38,9 +43,33 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private final Map<UUID, CombatCooldown> combatCooldown = Maps.newHashMap();
 
+    private final Map<UUID, Long> combatPenalty = Maps.newHashMap();
+
+    private Location lobby;
+
+    private final Map<Type, AbstractHandler<?>> handler = Maps.newHashMap();
+
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
-        new CooldownHandler(this);
+        registerHandler();
+        registerOnline();
+    }
+
+    private void registerOnline() {
+        Bukkit.getOnlinePlayers().forEach(player -> {
+            if (getPlayer(player) == null)
+                this.players.putIfAbsent(player.getUniqueId(), new SPPlayerImpl(player));
+        });
+    }
+
+    private void registerHandler() {
+        Arrays.stream(Type.values()).forEach(type -> {
+            switch (type) {
+                case COOLDOWN -> this.handler.putIfAbsent(type, new CooldownHandler(this));
+                case PENALTY -> this.handler.putIfAbsent(type, new PenaltyHandler(this));
+                case COMBAT -> this.handler.putIfAbsent(type, new CombatHandler(this));
+            }
+        });
     }
 
     @Override
@@ -59,6 +88,10 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     public Map<UUID, Long> getCombatTimestamp() {
         return combatTimestamp;
+    }
+
+    public Map<UUID, Long> getCombatPenalty() {
+        return combatPenalty;
     }
 
     @Override
@@ -96,8 +129,11 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
+        if (event.getRespawnReason() != PlayerRespawnEvent.RespawnReason.DEATH)
+            return;
         if (!this.combatCooldown.containsKey(player.getUniqueId()))
             return;
+        event.setRespawnLocation(lobby);
     }
 
     @EventHandler
@@ -106,39 +142,124 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
                 && this.combatTimestamp.containsKey(event.getDamager().getUniqueId()))
             return;
         if (event.getEntity() instanceof Player victim && event.getDamager() instanceof Player damager) {
-            ProtectedRegion region = WGUtils.getRegion(damager.getLocation());
-            if (region == null)
-                return;
-            StateFlag.State state = region.getFlag(Flags.PVP);
-            if (state == null || state == StateFlag.State.DENY)
+            if (!WGUtils.isInPVPRegion(damager.getLocation()))
                 return;
             this.combatTimestamp.putIfAbsent(victim.getUniqueId(), System.currentTimeMillis());
             this.combatTimestamp.putIfAbsent(damager.getUniqueId(), System.currentTimeMillis());
+
+            MessageUtils.sendTitle(victim, "&a&lBẬT GIAO TRANH",
+                    "&7Bạn nhận sát thương từ người chơi &6" + damager.getName());
+            MessageUtils.sendTitle(victim, "&a&lBẬT GIAO TRANH",
+                    "&7Bạn gây sát thương lên người chơi &6" + victim.getName());
+            XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(victim, 1f, -1f);
+            XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(damager, 1f, -1f);
+
+            applyRestriction(damager);
         }
     }
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        Location location = this.combatTimestamp.containsKey(player.getUniqueId()) ? event.getFrom()
-                : this.combatCooldown.containsKey(player.getUniqueId()) ? event.getTo() : null;
-        if (location == null)
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (to == null)
             return;
-        ProtectedRegion region = WGUtils.getRegion(location);
-        if (region == null)
+        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+            if (WGUtils.isInPVPRegion(from) && !WGUtils.isInPVPRegion(to)) {
+                event.setCancelled(true);
+                MessageUtils.sendCooldownMessage(player, 10,
+                        "&cBạn không được phép ra khỏi khu vực giao tranh trong khi đang giao tranh!");
+            }
+        } else if (this.combatCooldown.containsKey(player.getUniqueId())
+                || this.combatPenalty.containsKey(player.getUniqueId())) {
+            if (!WGUtils.isInPVPRegion(from) && WGUtils.isInPVPRegion(to)) {
+                event.setCancelled(true);
+                boolean isCooldown = this.combatCooldown.containsKey(player.getUniqueId());
+                long endTime = isCooldown
+                        ? this.combatCooldown.get(player.getUniqueId()).getEndTime()
+                        : this.combatPenalty.get(player.getUniqueId());
+                TimeUtils tu = TimeUtils.newInstance().add(endTime);
+                String duration = tu.getShortDuration();
+                MessageUtils.sendCooldownMessage(player, 10, isCooldown
+                        ? "&cBạn phải chờ &6" + tu.getShortDuration() + " &cmới được tham gia đấu trường tiếp"
+                        : "&cBạn đã bị cấm tham gia giao tranh, hiệu lực còn &6" + duration);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        SPPlayer spPlayer = getPlayer(player);
+        if (spPlayer == null)
+            this.players.putIfAbsent(player.getUniqueId(), new SPPlayerImpl(player));
+        if (this.combatPenalty.containsKey(player.getUniqueId())) {
+            MessageUtils.sendTitle(player,
+                    "&c&lBẠN BỊ PHẠT!",
+                    "&7Vì đã thoát trong lúc giao tranh.");
+            XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(player);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        SPPlayer spPlayer = getPlayer(player);
+        if (spPlayer == null)
             return;
-        StateFlag.State state = region.getFlag(Flags.PVP);
-        if (state == null || state == StateFlag.State.DENY)
+        if (!this.combatTimestamp.containsKey(player.getUniqueId()))
             return;
-        event.setCancelled(true);
+        ((SPPlayerImpl) spPlayer).enterCombatLogout();
+        this.combatTimestamp.remove(player.getUniqueId());
+
+        long combatLogoutTimes = spPlayer.getPenaltyTimes();
+        TimeUtils tu = TimeUtils.newInstance();
+        if (combatLogoutTimes == 1)
+            tu.add(TimeUnits.HOUR, 1);
+        else if (combatLogoutTimes == 2)
+            tu.add(TimeUnits.HOUR, 12);
+        else if (combatLogoutTimes >= 3)
+            tu.add(TimeUnits.DAY, 1);
+        this.combatPenalty.put(player.getUniqueId(), tu.getNewTime());
+    }
+
+    @EventHandler
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+            event.setCancelled(true);
+            MessageUtils.sendTitle(player, "&c&l✖", "&7Không thể xài lệnh khi đang giao tranh");
+        }
+    }
+
+    @EventHandler
+    public void onToggleFlying(PlayerToggleFlightEvent event) {
+        Player player = event.getPlayer();
         if (this.combatTimestamp.containsKey(player.getUniqueId()))
-            MessageUtils.sendCooldownMessage(player, 10,
-                    "&cBạn không được phép ra khỏi khu vực giao tranh trong khi đang giao tranh!");
-        else if(this.combatCooldown.containsKey(player.getUniqueId())) {
-            CombatCooldown cooldown = this.combatCooldown.get(player.getUniqueId());
-            TimeUtils tu = TimeUtils.newInstance().add(cooldown.getDuration());
-            MessageUtils.sendCooldownMessage(player, 10,
-                    "&cBạn phải chờ &6" + tu.getShortDuration() + " &cmới được tham gia đấu trường tiếp");
+            event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onPlayerGamemode(PlayerGameModeChangeEvent event) {
+        Player player = event.getPlayer();
+        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+            event.setCancelled(true);
+            if (player.getGameMode() != GameMode.ADVENTURE)
+                player.setGameMode(GameMode.ADVENTURE);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerPotion(EntityPotionEffectEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            if(!this.combatTimestamp.containsKey(player.getUniqueId()))
+                return;
+            if(event.getModifiedType() != PotionEffectType.INVISIBILITY)
+                return;
+            if (event.getAction() == EntityPotionEffectEvent.Action.ADDED
+                    || event.getAction() == EntityPotionEffectEvent.Action.CHANGED)
+                event.setCancelled(true);
         }
     }
 
@@ -159,33 +280,13 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         this.combatTimestamp.remove(player.getUniqueId());
     }
 
-    private static class CooldownHandler extends BukkitRunnable {
-
-        private final Map<UUID, CombatCooldown> combatCooldown;
-
-        public CooldownHandler(PlayerManagerImpl instance) {
-            this.combatCooldown = instance.getCombatCooldown();
-            runTaskTimerAsynchronously(instance.plugin, 20, 20);
-        }
-
-        @Override
-        public void run() {
-            Iterator<Map.Entry<UUID, CombatCooldown>> it = this.combatCooldown.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<UUID, CombatCooldown> entry = it.next();
-                UUID uuid = entry.getKey();
-                CombatCooldown cooldown = entry.getValue();
-                if (cooldown.getEndTime() > TimeUtils.newInstance().getNewTime())
-                    continue;
-                it.remove();
-                Player player = Bukkit.getPlayer(uuid);
-                if (player == null)
-                    continue;
-                MessageUtils.sendMessage(player, "&aBạn có thể tham gia đấu trường trở lại.");
-                XSound.ENTITY_EXPERIENCE_ORB_PICKUP.play(player);
-            }
-        }
-
+    private void applyRestriction(Player player) {
+        player.setFlying(false);
+        player.setGameMode(GameMode.ADVENTURE);
+        player.removePotionEffect(PotionEffectType.INVISIBILITY);
     }
 
+    public Plugin getPlugin() {
+        return this.plugin;
+    }
 }
