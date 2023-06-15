@@ -1,7 +1,6 @@
 package com.github.tezvn.starpvp.core.player;
 
 import com.cryptomorin.xseries.XSound;
-import com.github.tezvn.starpvp.api.AbstractDatabase;
 import com.github.tezvn.starpvp.api.AbstractDatabase.DatabaseInsertion;
 import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
@@ -10,7 +9,6 @@ import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.CombatCooldown;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.api.rank.SPRank;
-import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.handler.AbstractHandler;
 import com.github.tezvn.starpvp.core.handler.CombatHandler;
 import com.github.tezvn.starpvp.core.handler.CooldownHandler;
@@ -25,6 +23,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -32,9 +32,9 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.*;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffectType;
 
+import java.io.File;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -116,12 +116,6 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     @Override
     public void saveToDatabase(UUID uuid) {
-        MySQL database = getPlugin().getDatabase();
-        if (database == null || !database.isConnected())
-            return;
-        String tableName = getPlugin().getDocument().getString("database.table-name", "user");
-        if (!database.hasTable(tableName))
-            return;
         SPPlayer spPlayer = getPlayer(uuid);
         if (spPlayer == null)
             return;
@@ -139,12 +133,34 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         if (penaltyTime != -1)
             map.put("penalty.until", String.valueOf(penaltyTime));
 
-        database.addOrUpdate(tableName,
-                new DatabaseInsertion("uuid", uuid.toString()),
+        MySQL database = getPlugin().getDatabase();
+        if (database != null && database.isConnected()) {
+            String tableName = getPlugin().getDocument().getString("database.table-name", "user");
+            if (!database.hasTable(tableName))
+                return;
+            database.addOrUpdate(tableName,
+                    new DatabaseInsertion("uuid", uuid.toString()),
 
-                new DatabaseInsertion("uuid", uuid.toString()),
-                new DatabaseInsertion("player_name", spPlayer.getPlayerName()),
-                new DatabaseInsertion("data", GsonHelper.encode(map)));
+                    new DatabaseInsertion("uuid", uuid.toString()),
+                    new DatabaseInsertion("player_name", spPlayer.getPlayerName()),
+                    new DatabaseInsertion("data", GsonHelper.encode(map)));
+        }else
+            saveToLocal(map);
+    }
+
+    private void saveToLocal(Map<String, Object> map) {
+        try {
+            File folder = new File(plugin.getDataFolder() + "/users");
+            if(!folder.exists())
+                folder.mkdirs();
+            File file = new File(plugin.getDataFolder() + "/users/" + map.get("uuid") + ".yml");
+            if(!file.exists())
+                file.createNewFile();
+            FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+            map.forEach(config::set);
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -160,38 +176,38 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @SuppressWarnings("unchecked")
     @Override
     public SPPlayer loadFromDatabase(UUID uuid) {
-        MySQL database = getPlugin().getDatabase();
-        if (database == null || !database.isConnected())
-            return null;
-        String tableName = getPlugin().getDocument().getString("database.table-name", "user");
-        if (!database.hasTable(tableName))
-            return null;
-        ResultSet set = database.find(tableName, "uuid", uuid.toString());
         SPPlayer spPlayer = null;
-        try {
-            while(set.next()) {
-                spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
-                Map<String, String> map = (Map<String, String>) GsonHelper.decode(set.getString("data"));
-                SPRank rank = SPRank.valueOf(map.get("rank"));
-                long sp = Long.parseLong(map.get("sp.current"));
-                long penaltyTimes = Long.parseLong(map.get("penalty.times"));
-                boolean penaltyActivate = Boolean.parseBoolean(map.get("penalty.activate"));
-                boolean hasCooldown = map.keySet().stream().anyMatch(key -> key.startsWith("cooldown."));
-                if(hasCooldown) {
-                    long startTime = Long.parseLong(map.get("cooldown.start-time"));
-                    long endTime = Long.parseLong(map.get("cooldown.end-time"));
-                    this.combatCooldown.put(uuid, new CombatCooldownImpl(spPlayer, startTime, endTime));
-                }
-                long combatTimestamp = Long.parseLong(map.getOrDefault("combat-since", "-1"));
-                if(combatTimestamp != -1)
-                    this.combatTimestamp.put(uuid, combatTimestamp);
+        MySQL database = getPlugin().getDatabase();
+        if (database != null && database.isConnected()) {
+            String tableName = getPlugin().getDocument().getString("database.table-name", "user");
+            if (!database.hasTable(tableName))
+                return null;
+            ResultSet set = database.find(tableName, "uuid", uuid.toString());
+            try {
+                while (set.next()) {
+                    spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
+                    Map<String, String> map = (Map<String, String>) GsonHelper.decode(set.getString("data"));
+                    spPlayer.setRank(SPRank.valueOf(map.get("rank")));
+                    spPlayer.addStarPoint(Long.parseLong(map.get("sp.current")));
+                    long penaltyTimes = Long.parseLong(map.get("penalty.times"));
+                    boolean penaltyActivate = Boolean.parseBoolean(map.get("penalty.activate"));
+                    boolean hasCooldown = map.keySet().stream().anyMatch(key -> key.startsWith("cooldown."));
+                    if (hasCooldown) {
+                        long startTime = Long.parseLong(map.get("cooldown.start-time"));
+                        long endTime = Long.parseLong(map.get("cooldown.end-time"));
+                        this.combatCooldown.put(uuid, new CombatCooldownImpl(spPlayer, startTime, endTime));
+                    }
+                    long combatTimestamp = Long.parseLong(map.getOrDefault("combat-since", "-1"));
+                    if (combatTimestamp != -1)
+                        this.combatTimestamp.put(uuid, combatTimestamp);
 
-                long penaltyTime = Long.parseLong(map.getOrDefault("penalty.until", "-1"));
-                if(penaltyTime != -1)
-                    this.combatPenalty.put(uuid, penaltyTime);
+                    long penaltyTime = Long.parseLong(map.getOrDefault("penalty.until", "-1"));
+                    if (penaltyTime != -1)
+                        this.combatPenalty.put(uuid, penaltyTime);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
         return spPlayer;
     }
@@ -207,8 +223,8 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
         EloProcessor eloProcessor = new EloProcessor().setWinner(spKiller).setLoser(spVictim);
 
-        spVictim.setStarPoint(eloProcessor.getNewLoserSP());
-        spKiller.setStarPoint(eloProcessor.getNewWinnerSP());
+        spVictim.addStarPoint(eloProcessor.getNewLoserSP());
+        spKiller.addStarPoint(eloProcessor.getNewWinnerSP());
 
         spVictim.setStatistic(PlayerStatistic.DEATH_COUNT, spVictim.getStatistic(PlayerStatistic.DEATH_COUNT) + 1);
         spKiller.setStatistic(PlayerStatistic.KILL_COUNT, spVictim.getStatistic(PlayerStatistic.KILL_COUNT) + 1);

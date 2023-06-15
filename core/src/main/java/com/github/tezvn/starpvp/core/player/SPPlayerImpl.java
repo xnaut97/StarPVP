@@ -60,6 +60,11 @@ public class SPPlayerImpl implements SPPlayer {
 
     @Override
     public void setStarPoint(long starPoint) {
+        this.starPoint = starPoint;
+    }
+
+    @Override
+    public void addStarPoint(long starPoint) {
         long offsetPoint = starPoint - this.starPoint;
         if(offsetPoint > 0) {
             long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
@@ -83,13 +88,13 @@ public class SPPlayerImpl implements SPPlayer {
                 this.rank = rank.getNext();
                 this.rankPoint = this.rank.getSP();
                 this.starPoint = offset - this.starPoint;
-                setStarPoint(offset - this.starPoint);
+                addStarPoint(offset - this.starPoint);
             }
         } else {
             long offset = this.rank.getSP() - this.rank.getPrevious().getSP();
             this.rank = rank.getPrevious();
             this.rankPoint = this.rank.getSP();
-            setStarPoint(offset + starPoint);
+            addStarPoint(offset + starPoint);
         }
     }
 
@@ -102,7 +107,7 @@ public class SPPlayerImpl implements SPPlayer {
     public void setRank(SPRank rank, boolean resetSP) {
         this.rank = rank;
         this.rankPoint = rank.getSP();
-        setStarPoint(resetSP ? 0 : getStarPoint());
+        addStarPoint(resetSP ? 0 : getStarPoint());
     }
 
     @Override
@@ -167,6 +172,7 @@ public class SPPlayerImpl implements SPPlayer {
     public Map<String, Object> serialize() {
         Map<String, Object> map = Maps.newHashMap();
         map.put("uuid", getUniqueId().toString());
+        map.put("name", getPlayerName());
         map.put("rank", getRank().name());
         map.put("sp.total", String.valueOf(this.getStarPoint()));
         map.put("sp.current", String.valueOf(this.starPoint));
@@ -174,4 +180,5 @@ public class SPPlayerImpl implements SPPlayer {
         map.put("penalty.activate", String.valueOf(this.isPenalty()));
         return map;
     }
+
 }

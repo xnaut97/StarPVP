@@ -18,6 +18,8 @@ public interface SPPlayer {
 
     void setStarPoint(long starPoint);
 
+    void addStarPoint(long starPoint);
+
     SPRank getRank();
 
     void setRank(SPRank rank);
