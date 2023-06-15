@@ -1,15 +1,19 @@
 package com.github.tezvn.starpvp.core.player;
 
 import com.cryptomorin.xseries.XSound;
+import com.github.tezvn.starpvp.api.AbstractDatabase;
+import com.github.tezvn.starpvp.api.AbstractDatabase.DatabaseInsertion;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.CombatCooldown;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
+import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.handler.AbstractHandler;
 import com.github.tezvn.starpvp.core.handler.CombatHandler;
 import com.github.tezvn.starpvp.core.handler.CooldownHandler;
 import com.github.tezvn.starpvp.core.handler.PenaltyHandler;
+import com.github.tezvn.starpvp.core.utils.GsonHelper;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
 import com.github.tezvn.starpvp.core.utils.WGUtils;
 import com.github.tezvn.starpvp.core.utils.time.TimeUnits;
@@ -104,6 +108,54 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @Override
     public SPPlayer getPlayer(UUID uniqueId) {
         return this.players.getOrDefault(uniqueId, null);
+    }
+
+    @Override
+    public void saveToDatabase(UUID uuid) {
+        AbstractDatabase.MySQL database = getPlugin().getDatabase();
+        if (database == null || !database.isConnected())
+            return;
+        String tableName = getPlugin().getDocument().getString("database.table-name", "user");
+        if (!database.hasTable(tableName))
+            return;
+        SPPlayer spPlayer = getPlayer(uuid);
+        if (spPlayer == null)
+            return;
+        Map<String, Object> map = spPlayer.serialize();
+        CombatCooldown cooldown = this.combatCooldown.getOrDefault(uuid, null);
+        if (cooldown != null) {
+            map.put("cooldown.start-time", cooldown.getStartTime());
+            map.put("cooldown.end-time", cooldown.getStartTime());
+            map.put("cooldown.until", TimeUtils.format(cooldown.getEndTime()));
+        }
+        long timestamp = this.combatTimestamp.getOrDefault(uuid, -1L);
+        if (timestamp != -1)
+            map.put("combat-since", timestamp);
+        long penaltyTime = this.combatPenalty.getOrDefault(uuid, -1L);
+        if (penaltyTime != -1)
+            map.put("penalty.until", penaltyTime);
+
+        database.addOrUpdate(tableName,
+                new DatabaseInsertion("uuid", uuid.toString()),
+
+                new DatabaseInsertion("uuid", uuid.toString()),
+                new DatabaseInsertion("player_name", spPlayer.getPlayerName()),
+                new DatabaseInsertion("data", GsonHelper.encode(map)));
+    }
+
+    @Override
+    public void saveToDatabase(OfflinePlayer player) {
+        saveToDatabase(player.getUniqueId());
+    }
+
+    @Override
+    public SPPlayer loadFromDatabase(OfflinePlayer player) {
+        return null;
+    }
+
+    @Override
+    public SPPlayer loadFromDatabase(UUID uuid) {
+        return null;
     }
 
     @EventHandler
@@ -253,9 +305,9 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @EventHandler
     public void onPlayerPotion(EntityPotionEffectEvent event) {
         if (event.getEntity() instanceof Player player) {
-            if(!this.combatTimestamp.containsKey(player.getUniqueId()))
+            if (!this.combatTimestamp.containsKey(player.getUniqueId()))
                 return;
-            if(event.getModifiedType() != PotionEffectType.INVISIBILITY)
+            if (event.getModifiedType() != PotionEffectType.INVISIBILITY)
                 return;
             if (event.getAction() == EntityPotionEffectEvent.Action.ADDED
                     || event.getAction() == EntityPotionEffectEvent.Action.CHANGED)
@@ -286,7 +338,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         player.removePotionEffect(PotionEffectType.INVISIBILITY);
     }
 
-    public Plugin getPlugin() {
-        return this.plugin;
+    public SPPlugin getPlugin() {
+        return plugin;
     }
 }

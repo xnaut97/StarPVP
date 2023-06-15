@@ -10,6 +10,8 @@ public interface SPPlayer {
 
     UUID getUniqueId();
 
+    String getPlayerName();
+
     OfflinePlayer getPlayer();
 
     long getStarPoint();

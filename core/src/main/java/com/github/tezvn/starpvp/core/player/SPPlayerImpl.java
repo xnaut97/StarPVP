@@ -17,6 +17,8 @@ public class SPPlayerImpl implements SPPlayer {
 
     private final UUID uniqueId;
 
+    private final String playerName;
+
     private SPRank rank;
 
     private long starPoint;
@@ -31,6 +33,7 @@ public class SPPlayerImpl implements SPPlayer {
 
     public SPPlayerImpl(OfflinePlayer player) {
         this.uniqueId = player.getUniqueId();
+        this.playerName = player.getName();
         this.rank = SPRank.COAL;
         this.rankPoint = getRank().getSP();
     }
@@ -38,6 +41,11 @@ public class SPPlayerImpl implements SPPlayer {
     @Override
     public UUID getUniqueId() {
         return uniqueId;
+    }
+
+    @Override
+    public String getPlayerName() {
+        return playerName;
     }
 
     @Override
@@ -162,9 +170,8 @@ public class SPPlayerImpl implements SPPlayer {
         map.put("rank", getRank().name());
         map.put("sp.total", this.getStarPoint());
         map.put("sp.current", this.starPoint);
-        map.put("combat-logout.times", getPenaltyTimes());
-        map.put("combat-logout.penalty", this.isPenalty());
-
+        map.put("penalty.times", getPenaltyTimes());
+        map.put("penalty.activate", this.isPenalty());
         return map;
     }
 }

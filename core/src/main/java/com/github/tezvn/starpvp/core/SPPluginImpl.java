@@ -1,6 +1,6 @@
 package com.github.tezvn.starpvp.core;
 
-import com.github.tezvn.starpvp.api.AbstractDatabase;
+import com.github.tezvn.starpvp.api.AbstractDatabase.*;
 import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
@@ -47,6 +47,10 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         return playerManager;
     }
 
+    public MySQL getDatabase() {
+        return database;
+    }
+
     private void setupConfig() {
         try {
             this.document = YamlDocument.create(new File("config.yml"),
@@ -62,6 +66,25 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
     }
 
     private void setupDatabase() {
-
+        boolean toggle = getConfig().getBoolean("database.toggle", true);
+        if (!toggle)
+            return;
+        String username = getDocument().getString("database.username", "root");
+        String password = getDocument().getString("database.password", "");
+        String name = getDocument().getString("database.name", "authenticator");
+        String host = getDocument().getString("database.host", "localhost");
+        String port = getDocument().getString("database.port", "3306");
+        String tableName = getDocument().getString("database.table-name", "user");
+        this.database = new MySQL(this, username, password, name, host, port);
+        if (!this.database.isConnected()) {
+            getLogger().info("Use local cache instead.");
+            return;
+        }
+        boolean createResult = this.database.createTable(tableName,
+                new DatabaseElement("uuid", DatabaseElement.Type.VAR_CHAR),
+                new DatabaseElement("player_name", DatabaseElement.Type.VAR_CHAR),
+                new DatabaseElement("data", DatabaseElement.Type.LONG_TEXT));
+        if (createResult)
+            getLogger().info("Created table '" + tableName + "' success!");
     }
 }
