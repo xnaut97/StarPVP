@@ -253,6 +253,21 @@ public abstract class AbstractDatabase {
             }
         }
 
+        public ResultSet find(String table, String key, Object value) {
+            if (!isConnected())
+                return null;
+            try {
+                PreparedStatement statement = getConnection().prepareStatement(
+                        "SELECT * FROM " + table + " WHERE " + key + "=?");
+                if(value instanceof String)
+                    statement.setString(1, String.valueOf(value));
+                return statement.executeQuery();
+            }catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
     }
 
     public static class MySQL extends DeprecatedDatabase {

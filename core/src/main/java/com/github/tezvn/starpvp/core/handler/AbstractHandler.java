@@ -66,7 +66,12 @@ public abstract class AbstractHandler<T> extends BukkitRunnable {
                 continue;
             onRemoved(player);
             XSound.ENTITY_PLAYER_LEVELUP.play(player);
+            getPlayerManager().saveToDatabase(player);
         }
+    }
+
+    public PlayerManager getPlayerManager() {
+        return playerManager;
     }
 
     public abstract long getEndTime(T value);

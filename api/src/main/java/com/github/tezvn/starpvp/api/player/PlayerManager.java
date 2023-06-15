@@ -4,6 +4,7 @@ import com.github.tezvn.starpvp.api.player.SPPlayer;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,8 +22,10 @@ public interface PlayerManager {
 
     void saveToDatabase(OfflinePlayer player);
 
+    @Nullable
     SPPlayer loadFromDatabase(OfflinePlayer player);
 
+    @Nullable
     SPPlayer loadFromDatabase(UUID uuid);
 
 }

@@ -1,7 +1,7 @@
 package com.github.tezvn.starpvp.core.player;
 
-import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
+import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.utils.MathUtils;
@@ -168,10 +168,10 @@ public class SPPlayerImpl implements SPPlayer {
         Map<String, Object> map = Maps.newHashMap();
         map.put("uuid", getUniqueId().toString());
         map.put("rank", getRank().name());
-        map.put("sp.total", this.getStarPoint());
-        map.put("sp.current", this.starPoint);
-        map.put("penalty.times", getPenaltyTimes());
-        map.put("penalty.activate", this.isPenalty());
+        map.put("sp.total", String.valueOf(this.getStarPoint()));
+        map.put("sp.current", String.valueOf(this.starPoint));
+        map.put("penalty.times", String.valueOf(getPenaltyTimes()));
+        map.put("penalty.activate", String.valueOf(this.isPenalty()));
         return map;
     }
 }

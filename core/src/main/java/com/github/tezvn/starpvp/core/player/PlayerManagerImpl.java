@@ -3,11 +3,13 @@ package com.github.tezvn.starpvp.core.player;
 import com.cryptomorin.xseries.XSound;
 import com.github.tezvn.starpvp.api.AbstractDatabase;
 import com.github.tezvn.starpvp.api.AbstractDatabase.DatabaseInsertion;
+import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.CombatCooldown;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
+import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.handler.AbstractHandler;
 import com.github.tezvn.starpvp.core.handler.CombatHandler;
@@ -33,6 +35,8 @@ import org.bukkit.event.player.*;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffectType;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 
 import static com.github.tezvn.starpvp.core.handler.AbstractHandler.*;
@@ -112,7 +116,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     @Override
     public void saveToDatabase(UUID uuid) {
-        AbstractDatabase.MySQL database = getPlugin().getDatabase();
+        MySQL database = getPlugin().getDatabase();
         if (database == null || !database.isConnected())
             return;
         String tableName = getPlugin().getDocument().getString("database.table-name", "user");
@@ -124,16 +128,16 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         Map<String, Object> map = spPlayer.serialize();
         CombatCooldown cooldown = this.combatCooldown.getOrDefault(uuid, null);
         if (cooldown != null) {
-            map.put("cooldown.start-time", cooldown.getStartTime());
-            map.put("cooldown.end-time", cooldown.getStartTime());
+            map.put("cooldown.start-time", String.valueOf(cooldown.getStartTime()));
+            map.put("cooldown.end-time", String.valueOf(cooldown.getStartTime()));
             map.put("cooldown.until", TimeUtils.format(cooldown.getEndTime()));
         }
         long timestamp = this.combatTimestamp.getOrDefault(uuid, -1L);
         if (timestamp != -1)
-            map.put("combat-since", timestamp);
+            map.put("combat-since", String.valueOf(timestamp));
         long penaltyTime = this.combatPenalty.getOrDefault(uuid, -1L);
         if (penaltyTime != -1)
-            map.put("penalty.until", penaltyTime);
+            map.put("penalty.until", String.valueOf(penaltyTime));
 
         database.addOrUpdate(tableName,
                 new DatabaseInsertion("uuid", uuid.toString()),
@@ -150,12 +154,46 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     @Override
     public SPPlayer loadFromDatabase(OfflinePlayer player) {
-        return null;
+        return loadFromDatabase(player.getUniqueId());
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public SPPlayer loadFromDatabase(UUID uuid) {
-        return null;
+        MySQL database = getPlugin().getDatabase();
+        if (database == null || !database.isConnected())
+            return null;
+        String tableName = getPlugin().getDocument().getString("database.table-name", "user");
+        if (!database.hasTable(tableName))
+            return null;
+        ResultSet set = database.find(tableName, "uuid", uuid.toString());
+        SPPlayer spPlayer = null;
+        try {
+            while(set.next()) {
+                spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
+                Map<String, String> map = (Map<String, String>) GsonHelper.decode(set.getString("data"));
+                SPRank rank = SPRank.valueOf(map.get("rank"));
+                long sp = Long.parseLong(map.get("sp.current"));
+                long penaltyTimes = Long.parseLong(map.get("penalty.times"));
+                boolean penaltyActivate = Boolean.parseBoolean(map.get("penalty.activate"));
+                boolean hasCooldown = map.keySet().stream().anyMatch(key -> key.startsWith("cooldown."));
+                if(hasCooldown) {
+                    long startTime = Long.parseLong(map.get("cooldown.start-time"));
+                    long endTime = Long.parseLong(map.get("cooldown.end-time"));
+                    this.combatCooldown.put(uuid, new CombatCooldownImpl(spPlayer, startTime, endTime));
+                }
+                long combatTimestamp = Long.parseLong(map.getOrDefault("combat-since", "-1"));
+                if(combatTimestamp != -1)
+                    this.combatTimestamp.put(uuid, combatTimestamp);
+
+                long penaltyTime = Long.parseLong(map.getOrDefault("penalty.until", "-1"));
+                if(penaltyTime != -1)
+                    this.combatPenalty.put(uuid, penaltyTime);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return spPlayer;
     }
 
     @EventHandler
@@ -260,20 +298,21 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         SPPlayer spPlayer = getPlayer(player);
         if (spPlayer == null)
             return;
-        if (!this.combatTimestamp.containsKey(player.getUniqueId()))
-            return;
-        ((SPPlayerImpl) spPlayer).enterCombatLogout();
-        this.combatTimestamp.remove(player.getUniqueId());
+        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+            ((SPPlayerImpl) spPlayer).enterCombatLogout();
+            this.combatTimestamp.remove(player.getUniqueId());
 
-        long combatLogoutTimes = spPlayer.getPenaltyTimes();
-        TimeUtils tu = TimeUtils.newInstance();
-        if (combatLogoutTimes == 1)
-            tu.add(TimeUnits.HOUR, 1);
-        else if (combatLogoutTimes == 2)
-            tu.add(TimeUnits.HOUR, 12);
-        else if (combatLogoutTimes >= 3)
-            tu.add(TimeUnits.DAY, 1);
-        this.combatPenalty.put(player.getUniqueId(), tu.getNewTime());
+            long combatLogoutTimes = spPlayer.getPenaltyTimes();
+            TimeUtils tu = TimeUtils.newInstance();
+            if (combatLogoutTimes == 1)
+                tu.add(TimeUnits.HOUR, 1);
+            else if (combatLogoutTimes == 2)
+                tu.add(TimeUnits.HOUR, 12);
+            else if (combatLogoutTimes >= 3)
+                tu.add(TimeUnits.DAY, 1);
+            this.combatPenalty.put(player.getUniqueId(), tu.getNewTime());
+        }
+        saveToDatabase(player);
     }
 
     @EventHandler
