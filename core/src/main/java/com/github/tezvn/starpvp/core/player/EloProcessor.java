@@ -27,7 +27,6 @@ public class EloProcessor {
 
     public long getNewWinnerSP() {
         validate();
-
         double Qa = MathUtils.roundDouble(Math.pow(10, (double) loser.getStarPoint() /400), 3);
         double Qb = MathUtils.roundDouble(Math.pow(10, (double) winner.getStarPoint() /400), 3);
         double Eb = MathUtils.roundDouble(Qb/(Qa+Qb), 3);
@@ -56,7 +55,6 @@ public class EloProcessor {
 
     public long getNewLoserSP() {
         validate();
-
         double Qa = MathUtils.roundDouble(Math.pow(10, (double) loser.getStarPoint() /400), 3);
         double Qb = MathUtils.roundDouble(Math.pow(10, (double) winner.getStarPoint() /400), 3);
         double Ea = MathUtils.roundDouble(Qa/(Qa+Qb), 3);

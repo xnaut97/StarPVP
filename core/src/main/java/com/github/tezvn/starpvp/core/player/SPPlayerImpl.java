@@ -65,23 +65,40 @@ public class SPPlayerImpl implements SPPlayer {
 
     @Override
     public void addStarPoint(long starPoint) {
-        long offsetPoint = starPoint - this.starPoint;
-        if(offsetPoint > 0) {
+        if(starPoint > 0) {
             long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
             long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
             if(deathCount > killCount) {
                 double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
                         (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
                 if (deathPercent >= getPercent("hell-sp.activate"))
-                    offsetPoint *= getMultiplier("hell-sp.multiplier");
+                    starPoint *= getMultiplier("hell-sp.multiplier.kill");
             }else {
                 double killPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.KILL_COUNT),
                         (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
                 if(killPercent >= getPercent("high-sp.activate"))
-                    offsetPoint += (offsetPoint*getMultiplier("high-sp.multiplier"));
+                    starPoint += (starPoint*getMultiplier("high-sp.multiplier"));
             }
         }
-        this.starPoint += offsetPoint;
+        this.starPoint += starPoint;
+        updateRank();
+    }
+
+    @Override
+    public void subtractStarPoint(long starPoint) {
+        long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
+        long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
+        if(deathCount > killCount) {
+            double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
+                    (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
+            if (deathPercent >= getPercent("hell-sp.activate"))
+                starPoint /= getMultiplier("hell-sp.multiplier.death");
+        }
+        this.starPoint -= starPoint;
+        updateRank();
+    }
+
+    public void updateRank() {
         if (this.starPoint > 0) {
             long offset = this.rank.getNext().getSP() - this.rank.getSP();
             if (this.starPoint - offset >= 0) {

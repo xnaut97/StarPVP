@@ -20,6 +20,8 @@ public interface SPPlayer {
 
     void addStarPoint(long starPoint);
 
+    void subtractStarPoint(long starPoint);
+
     SPRank getRank();
 
     void setRank(SPRank rank);

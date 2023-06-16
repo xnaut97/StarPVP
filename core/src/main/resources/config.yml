@@ -9,3 +9,20 @@ database:
   name: 'starpvp'
   host: 'localhost'
   port: 'default'
+
+hell-sp:
+  # Percent to activate Hell SP when death count is accounted
+  # for more than X% of the total combat times.
+  activate: '60%'
+  multiplier:
+    # SP will be decreased by X% when victory
+    # New SP = {total-sp} + {sp-gained} - ({sp-gained} * {multiplier}%)
+    # Example: 1603 + 16 - (16 * 0.4) = 1603 + 16 - 6.4 = 1612.6 = 1612 (rounded)
+    kill: '30%'
+    # SP will be increased by X% when defeat
+    # SP = {total-sp} - {sp-lost} - ({sp-lost} * {multiplier}%)
+    # Example: 1603 - 16 - (16 * 0.4) = 1603 - 16 - 6.4 = 1580.6 = 1580 (rounded)
+    death: '40%'
+
+high-sp:
+  activate: '35%'

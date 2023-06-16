@@ -188,7 +188,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
                     spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
                     Map<String, String> map = (Map<String, String>) GsonHelper.decode(set.getString("data"));
                     spPlayer.setRank(SPRank.valueOf(map.get("rank")));
-                    spPlayer.addStarPoint(Long.parseLong(map.get("sp.current")));
+                    spPlayer.setStarPoint(Long.parseLong(map.get("sp.current")));
                     long penaltyTimes = Long.parseLong(map.get("penalty.times"));
                     boolean penaltyActivate = Boolean.parseBoolean(map.get("penalty.activate"));
                     boolean hasCooldown = map.keySet().stream().anyMatch(key -> key.startsWith("cooldown."));
@@ -208,8 +208,25 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             } catch (SQLException e) {
                 e.printStackTrace();
             }
-        }
+        }else
+            spPlayer = loadFromLocal(uuid);
         return spPlayer;
+    }
+
+    private SPPlayer loadFromLocal(UUID uuid) {
+        File folder = new File(plugin.getDataFolder() + "/users");
+        if(!folder.exists())
+            return null;
+        File[] files = folder.listFiles();
+        if(files == null || files.length == 0)
+            return null;
+        File file = Arrays.stream(files)
+                .filter(f -> !f.isDirectory() && f.getName().endsWith(".yml"))
+                .findAny().orElse(null);
+        if(file == null)
+            return null;
+        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+
     }
 
     @EventHandler
@@ -222,8 +239,9 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         SPPlayer spKiller = getPlayer(killer);
 
         EloProcessor eloProcessor = new EloProcessor().setWinner(spKiller).setLoser(spVictim);
-
-        spVictim.addStarPoint(eloProcessor.getNewLoserSP());
+        long toAdd = eloProcessor.getNewLoserSP() - eloProcessor.getOldLoserSP();
+        long toSubtract = eloProcessor.getOldLoserSP() - eloProcessor.getNewLoserSP();
+        spVictim.addStarPoint(toAdd);
         spKiller.addStarPoint(eloProcessor.getNewWinnerSP());
 
         spVictim.setStatistic(PlayerStatistic.DEATH_COUNT, spVictim.getStatistic(PlayerStatistic.DEATH_COUNT) + 1);
