@@ -31,20 +31,26 @@ public class WGUtils {
                 .findAny().orElse(null);
     }
 
-    public static ProtectedRegion getRegion(String id) {
+    public static ProtectedRegion getRegion(String id, World world) {
         if(!hasWorldGuard())
             return null;
         RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
-        for (World world : Bukkit.getWorlds()) {
-            RegionManager manager = container.get(BukkitAdapter.adapt(world));
-            if (manager == null)
-                continue;
-            ProtectedRegion region = manager.getRegion(id);
-            if (region == null)
-                continue;
-            return region;
-        }
-        return null;
+        RegionManager manager = container.get(BukkitAdapter.adapt(world));
+        return manager == null ? null : manager.getRegion(id);
+    }
+
+    public static Location getSpawnLocation(String id, World world) {
+        return getSpawnLocation(id, world, true);
+    }
+
+    public static Location getSpawnLocation(String id, World world, boolean center) {
+        ProtectedRegion region = getRegion(id, world);
+        if(region == null)
+            return null;
+        com.sk89q.worldedit.util.Location wgLocation = region.getFlag(Flags.SPAWN_LOC);
+        double offset = center ? .5 : 0;
+        return wgLocation == null ? null : new Location(world, wgLocation.getBlockX() + offset,
+                wgLocation.getBlockY() + offset, wgLocation.getBlockZ() + offset);
     }
 
     public static boolean isInPVPRegion(Location location) {

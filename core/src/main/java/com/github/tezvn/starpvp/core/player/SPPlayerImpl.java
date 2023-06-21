@@ -21,7 +21,7 @@ public class SPPlayerImpl implements SPPlayer {
 
     private SPRank rank;
 
-    private long starPoint;
+    private long eloPoint;
 
     private long rankPoint;
 
@@ -34,8 +34,6 @@ public class SPPlayerImpl implements SPPlayer {
     public SPPlayerImpl(OfflinePlayer player) {
         this.uniqueId = player.getUniqueId();
         this.playerName = player.getName();
-        this.rank = SPRank.COAL;
-        this.rankPoint = getRank().getSP();
     }
 
     @Override
@@ -54,64 +52,69 @@ public class SPPlayerImpl implements SPPlayer {
     }
 
     @Override
-    public long getStarPoint() {
-        return this.rankPoint + this.starPoint;
+    public long getEloPoint() {
+        return this.rankPoint + this.eloPoint;
+    }
+
+    public long getRawEP() {
+        return this.eloPoint;
     }
 
     @Override
-    public void setStarPoint(long starPoint) {
-        this.starPoint = starPoint;
-    }
-
-    @Override
-    public void addStarPoint(long starPoint) {
-        if(starPoint > 0) {
-            long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
-            long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
-            if(deathCount > killCount) {
-                double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
-                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-                if (deathPercent >= getPercent("hell-sp.activate"))
-                    starPoint *= getMultiplier("hell-sp.multiplier.kill");
-            }else {
-                double killPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.KILL_COUNT),
-                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-                if(killPercent >= getPercent("high-sp.activate"))
-                    starPoint += (starPoint*getMultiplier("high-sp.multiplier"));
-            }
-        }
-        this.starPoint += starPoint;
+    public void setEloPoint(long eloPoint) {
+        this.eloPoint = eloPoint;
         updateRank();
     }
 
     @Override
-    public void subtractStarPoint(long starPoint) {
-        long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
-        long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
-        if(deathCount > killCount) {
-            double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
-                    (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-            if (deathPercent >= getPercent("hell-sp.activate"))
-                starPoint /= getMultiplier("hell-sp.multiplier.death");
-        }
-        this.starPoint -= starPoint;
+    public void addEloPoint(long starPoint) {
+//        if(eloPoint > 0) {
+//            long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
+//            long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
+//            if(deathCount > killCount) {
+//                double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
+//                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
+//                if (deathPercent >= getPercent("hell-sp.activate"))
+//                    eloPoint = (long) (eloPoint - (eloPoint * getMultiplier("hell-sp.multiplier.kill")));
+//            }else {
+//                double killPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.KILL_COUNT),
+//                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
+//                if(killPercent >= getPercent("high-sp.chance"))
+//                    eloPoint += (eloPoint*getMultiplier("high-sp.multiplier"));
+//            }
+//        }
+        this.eloPoint += starPoint;
+        updateRank();
+    }
+
+    @Override
+    public void subtractEloPoint(long starPoint) {
+//        long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
+//        long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
+//        if(deathCount > killCount) {
+//            double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
+//                    (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
+//            if (deathPercent >= getPercent("hell-sp.activate"))
+//                eloPoint = (long) (eloPoint + (eloPoint * getMultiplier("hell-sp.multiplier.death")));
+//        }
+        this.eloPoint -= starPoint;
         updateRank();
     }
 
     public void updateRank() {
-        if (this.starPoint > 0) {
+        if (this.eloPoint >= 0) {
             long offset = this.rank.getNext().getSP() - this.rank.getSP();
-            if (this.starPoint - offset >= 0) {
+            if (this.eloPoint - offset > 0) {
                 this.rank = rank.getNext();
                 this.rankPoint = this.rank.getSP();
-                this.starPoint = offset - this.starPoint;
-                addStarPoint(offset - this.starPoint);
+                this.eloPoint = offset - this.eloPoint;
+                addEloPoint(offset - this.eloPoint);
             }
         } else {
             long offset = this.rank.getSP() - this.rank.getPrevious().getSP();
             this.rank = rank.getPrevious();
             this.rankPoint = this.rank.getSP();
-            addStarPoint(offset + starPoint);
+            addEloPoint(offset + eloPoint);
         }
     }
 
@@ -121,15 +124,15 @@ public class SPPlayerImpl implements SPPlayer {
     }
 
     @Override
-    public void setRank(SPRank rank, boolean resetSP) {
-        this.rank = rank;
-        this.rankPoint = rank.getSP();
-        addStarPoint(resetSP ? 0 : getStarPoint());
+    public void setRank(SPRank rank) {
+        setRank(rank, false);
     }
 
     @Override
-    public void setRank(SPRank rank) {
-        setRank(rank, false);
+    public void setRank(SPRank rank, boolean resetSP) {
+        this.rank = rank;
+        this.rankPoint = rank.getSP();
+        setEloPoint(resetSP ? 0 : this.eloPoint);
     }
 
     @Override
@@ -157,11 +160,20 @@ public class SPPlayerImpl implements SPPlayer {
     public void enterCombatLogout() {
         if(this.isPenalty())
             return;
+        this.isPenalty = true;
         this.penaltyTimes +=1;
     }
 
     public void leaveCombatLogOut() {
         this.isPenalty = false;
+    }
+
+    public void setPenaltyTimes(int penaltyTimes) {
+        this.penaltyTimes = penaltyTimes;
+    }
+
+    public void setPenalty(boolean penalty) {
+        isPenalty = penalty;
     }
 
     private double getPercent(String key) {
@@ -190,9 +202,9 @@ public class SPPlayerImpl implements SPPlayer {
         Map<String, Object> map = Maps.newHashMap();
         map.put("uuid", getUniqueId().toString());
         map.put("name", getPlayerName());
-        map.put("rank", getRank().name());
-        map.put("sp.total", String.valueOf(this.getStarPoint()));
-        map.put("sp.current", String.valueOf(this.starPoint));
+        map.put("rank", getRank().getId());
+        map.put("sp.total", String.valueOf(this.getEloPoint()));
+        map.put("sp.current", String.valueOf(this.eloPoint));
         map.put("penalty.times", String.valueOf(getPenaltyTimes()));
         map.put("penalty.activate", String.valueOf(this.isPenalty()));
         return map;

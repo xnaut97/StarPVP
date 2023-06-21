@@ -1,6 +1,6 @@
-name: core
+name: StarPVP
 version: '${project.version}'
-main: com.github.tezvn.starpvp.core.Core
+main: com.github.tezvn.starpvp.core.SPPluginImpl
 api-version: 1.19
 authors: [ TezVN ]
 softdepend:

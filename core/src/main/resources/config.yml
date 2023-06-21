@@ -24,5 +24,45 @@ hell-sp:
     # Example: 1603 - 16 - (16 * 0.4) = 1603 - 16 - 6.4 = 1580.6 = 1580 (rounded)
     death: '40%'
 
+# In High SP, player will get more gained SP when he killed someone
 high-sp:
+  # Percent to get High SP: when kill count is accounted
+  # for more than X% of the total combat times.
   activate: '35%'
+  # Chance to get addition SP when player is at High SP
+  chance: '30%'
+  # SP = {total-sp} + {sp-gained} + {sp-gained}*{multiplier}
+  multiplier: '25%'
+
+# Set lobby for respawning player
+# Defined by WorldGuard region id.
+lobby: ''
+
+ranks:
+  coal:
+    sp: 1000
+    name: '&8&lTập Sự'
+  copper:
+    sp: 1200
+    name: '&3&lĐồng'
+  iron:
+    sp: 1600
+    name: '&7&lSắt'
+  gold:
+    sp: 1800
+    name: '&e&lVàng'
+  diamond:
+    sp: 2000
+    name: '&b&lKim Cương'
+  emerald:
+    sp: 2200
+    name: '&a&lLục Bảo'
+  netherite:
+    sp: 2400
+    name: '&2&lCao Thủ'
+  starise:
+    sp: 2500
+    name: '&c&lĐại Cao Thủ'
+  challenger:
+    sp: 2800
+    name: '&6&lThách Đấu'

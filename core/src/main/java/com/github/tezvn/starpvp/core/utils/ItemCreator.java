@@ -15,6 +15,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -70,7 +71,15 @@ public class ItemCreator implements Cloneable {
     private String[] getSkin(String name) {
         try {
             URL url_0 = new URL("https://api.mojang.com/users/profiles/minecraft/" + name);
-            InputStreamReader reader_0 = new InputStreamReader(url_0.openStream());
+            InputStream stream = null;
+            try {
+                stream = url_0.openStream();
+            }catch (Exception ignored) {
+
+            }
+            if(stream == null)
+                return null;
+            InputStreamReader reader_0 = new InputStreamReader(stream);
             String uuid = new JsonParser().parse(reader_0).getAsJsonObject().get("id").getAsString();
 
             URL url_1 = new URL("https://sessionserver.mojang.com/session/minecraft/profile/" + uuid + "?unsigned=false");

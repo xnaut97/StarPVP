@@ -674,6 +674,7 @@ public abstract class BaseMenu implements InventoryHolder {
                     next();
                 }
             });
+            onIndexComplete();
         }
 
         @Override
@@ -811,6 +812,8 @@ public abstract class BaseMenu implements InventoryHolder {
         public ItemStack fillOtherSlotWhenFull() {
             return null;
         }
+
+        public void onIndexComplete() {}
     }
 
     public static class InventoryElement {

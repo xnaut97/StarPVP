@@ -14,13 +14,13 @@ public interface SPPlayer {
 
     OfflinePlayer getPlayer();
 
-    long getStarPoint();
+    long getEloPoint();
 
-    void setStarPoint(long starPoint);
+    void setEloPoint(long eloPoint);
 
-    void addStarPoint(long starPoint);
+    void addEloPoint(long starPoint);
 
-    void subtractStarPoint(long starPoint);
+    void subtractEloPoint(long starPoint);
 
     SPRank getRank();
 

@@ -42,7 +42,13 @@ public class MessageUtils {
     }
 
     public static void broadcast(String... messages) {
+        broadcast(null, messages);
+    }
+
+    public static void broadcast(List<UUID> excludes, String... messages) {
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if(excludes != null && excludes.contains(player.getUniqueId()))
+                continue;
             sendMessage(player, messages);
         }
     }

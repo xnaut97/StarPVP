@@ -4,7 +4,10 @@ import com.github.tezvn.starpvp.api.AbstractDatabase.*;
 import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
+import com.github.tezvn.starpvp.api.rank.RankManager;
+import com.github.tezvn.starpvp.core.commands.CommandManager;
 import com.github.tezvn.starpvp.core.player.PlayerManagerImpl;
+import com.github.tezvn.starpvp.core.rank.RankManagerImpl;
 import com.github.tezvn.starpvp.core.utils.BaseMenu;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.dvs.versioning.BasicVersioning;
@@ -15,6 +18,7 @@ import dev.dejvokep.boostedyaml.settings.updater.UpdaterSettings;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.util.Objects;
 
 public class SPPluginImpl extends JavaPlugin implements SPPlugin {
 
@@ -23,18 +27,25 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
     private PlayerManager playerManager;
 
     private MySQL database;
+    private CommandManager commandManager;
+
+    private RankManager rankManager;
 
     @Override
     public void onEnable() {
         BaseMenu.register(this);
         setupConfig();
         setupDatabase();
+        this.rankManager = new RankManagerImpl(this);
         this.playerManager = new PlayerManagerImpl(this);
+        this.commandManager = new CommandManager(this);
     }
 
     @Override
     public void onDisable() {
         BaseMenu.forceCloseAll();
+        if(this.commandManager != null)
+            this.commandManager.unregister();
     }
 
     @Override
@@ -47,14 +58,19 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         return playerManager;
     }
 
+    @Override
+    public RankManager getRankManager() {
+        return rankManager;
+    }
+
     public MySQL getDatabase() {
         return database;
     }
 
     private void setupConfig() {
         try {
-            this.document = YamlDocument.create(new File("config.yml"),
-                    getResource("config.yml"),
+            this.document = YamlDocument.create(new File(getDataFolder(), "config.yml"),
+                    Objects.requireNonNull(getResource("config.yml")),
                     GeneralSettings.DEFAULT,
                     LoaderSettings.builder().setAutoUpdate(true).build(),
                     DumperSettings.DEFAULT,

@@ -10,9 +10,9 @@ public class EloProcessor {
 
     private SPPlayer winner;
 
-    private long oldLoserSP;
+    private long oldLoserEP;
 
-    private long oldWinnerSP;
+    private long oldWinnerEP;
 
     public EloProcessor() {
     }
@@ -21,21 +21,21 @@ public class EloProcessor {
         return winner;
     }
 
-    public long getOldWinnerSP() {
-        return oldWinnerSP;
+    public long getOldWinnerEP() {
+        return oldWinnerEP;
     }
 
-    public long getNewWinnerSP() {
+    public long getNewWinnerEP() {
         validate();
-        double Qa = MathUtils.roundDouble(Math.pow(10, (double) loser.getStarPoint() /400), 3);
-        double Qb = MathUtils.roundDouble(Math.pow(10, (double) winner.getStarPoint() /400), 3);
+        double Qa = MathUtils.roundDouble(Math.pow(10, (double) loser.getEloPoint() /400), 3);
+        double Qb = MathUtils.roundDouble(Math.pow(10, (double) winner.getEloPoint() /400), 3);
         double Eb = MathUtils.roundDouble(Qb/(Qa+Qb), 3);
-        return MathUtils.roundUp(winner.getStarPoint() + getKFactor(winner)*(1 - Eb));
+        return MathUtils.roundUp(winner.getEloPoint() + getKFactor(winner)*(1 - Eb));
     }
 
     public EloProcessor setWinner(SPPlayer winner) {
         this.winner = winner;
-        this.oldWinnerSP = winner.getStarPoint();
+        this.oldWinnerEP = winner.getEloPoint();
         return this;
     }
 
@@ -43,26 +43,26 @@ public class EloProcessor {
         return loser;
     }
 
-    public long getOldLoserSP() {
-        return oldLoserSP;
+    public long getOldLoserEP() {
+        return oldLoserEP;
     }
 
     public EloProcessor setLoser(SPPlayer loser) {
         this.loser = loser;
-        this.oldLoserSP = loser.getStarPoint();
+        this.oldLoserEP = loser.getEloPoint();
         return this;
     }
 
-    public long getNewLoserSP() {
+    public long getNewLoserEP() {
         validate();
-        double Qa = MathUtils.roundDouble(Math.pow(10, (double) loser.getStarPoint() /400), 3);
-        double Qb = MathUtils.roundDouble(Math.pow(10, (double) winner.getStarPoint() /400), 3);
+        double Qa = MathUtils.roundDouble(Math.pow(10, (double) loser.getEloPoint() /400), 3);
+        double Qb = MathUtils.roundDouble(Math.pow(10, (double) winner.getEloPoint() /400), 3);
         double Ea = MathUtils.roundDouble(Qa/(Qa+Qb), 3);
-        return MathUtils.roundUp(loser.getStarPoint() + getKFactor(loser)*(0 - Ea));
+        return MathUtils.roundUp(loser.getEloPoint() + getKFactor(loser)*(0 - Ea));
     }
 
     private int getKFactor(SPPlayer player) {
-        long sp = player.getStarPoint();
+        long sp = player.getEloPoint();
         if(sp > 2400)
             return 10;
         if(sp >= 2000 && sp < 2400)

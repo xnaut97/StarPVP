@@ -54,7 +54,7 @@ public abstract class AbstractHandler<T> extends BukkitRunnable {
             long now = TimeUtils.newInstance().getNewTime();
             if(endTime > now) {
                 int secondsLeft = (int) ((endTime - now) / 1000);
-                if(secondsLeft <= 5 && player != null) {
+                if(secondsLeft > 0 && secondsLeft <= 5 && player != null) {
                     onAboutToRemove(player, secondsLeft);
                     XSound.ENTITY_EXPERIENCE_ORB_PICKUP.play(player, 1f,
                             ThreadLocalRandom.current().nextFloat(1, 2));
