@@ -59,6 +59,8 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private final Map<UUID, Integer> killStreaks = Maps.newHashMap();
 
+
+
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
         registerHandler();
@@ -477,14 +479,14 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         if (firstCombatTime == -1)
             return;
         int minutes = (int) ((System.currentTimeMillis() - firstCombatTime) / 60000);
-        int revivieMinutes = 0;
+        int reviveSeconds = 0;
         if (minutes <= 6)
-            revivieMinutes = minutes * 2 + 4;
+            reviveSeconds = minutes * 2 + 4;
         else if (minutes == 7)
-            revivieMinutes = 21;
+            reviveSeconds = 21;
         else if (minutes > 8)
-            revivieMinutes = minutes * 2 + 6;
-        TimeUtils tu = TimeUtils.newInstance().add(TimeUnits.MINUTE, revivieMinutes);
+            reviveSeconds = minutes * 2 + 6;
+        TimeUtils tu = TimeUtils.newInstance().add(TimeUnits.SECOND, reviveSeconds);
         this.combatCooldown.putIfAbsent(player.getUniqueId(), new CombatCooldownImpl(getPlayer(player), tu.getNewTime()));
         this.combatTimestamp.remove(player.getUniqueId());
     }
