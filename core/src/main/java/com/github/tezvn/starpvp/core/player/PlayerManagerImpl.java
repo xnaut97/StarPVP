@@ -59,7 +59,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private final Map<UUID, Integer> killStreaks = Maps.newHashMap();
 
-
+    private final Map<UUID, UUID> killGuard = Maps.newHashMap();
 
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
@@ -276,9 +276,6 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         Player killer = victim.getKiller();
         if (killer == null)
             return;
-        long combatTimestamp = this.combatTimestamp.get(victim.getUniqueId());
-
-
         SPPlayer spVictim = getPlayer(victim);
         SPPlayer spKiller = getPlayer(killer);
 
@@ -292,6 +289,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         spKiller.setStatistic(PlayerStatistic.KILL_COUNT, spVictim.getStatistic(PlayerStatistic.KILL_COUNT) + 1);
 
         applyReviveCooldown(victim);
+
 
         int currentStreak = this.killStreaks.getOrDefault(killer.getUniqueId(), 0);
         this.killStreaks.put(killer.getUniqueId(), currentStreak + 1);
