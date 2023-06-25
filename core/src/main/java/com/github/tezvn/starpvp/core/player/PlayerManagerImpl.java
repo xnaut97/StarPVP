@@ -59,8 +59,6 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private final Map<UUID, Integer> killStreaks = Maps.newHashMap();
 
-    private final Map<UUID, UUID> killGuard = Maps.newHashMap();
-
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
         registerHandler();
