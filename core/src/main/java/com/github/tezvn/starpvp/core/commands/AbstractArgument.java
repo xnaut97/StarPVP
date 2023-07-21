@@ -1,7 +1,8 @@
-package com.github.tezvn.starpvp.core.commands.arguments;
+package com.github.tezvn.starpvp.core.commands;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
+import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.github.tezvn.starpvp.core.commands.AbstractCommand;
 import com.google.common.collect.Lists;
 import org.bukkit.command.CommandSender;
@@ -25,6 +26,10 @@ public abstract class AbstractArgument extends AbstractCommand.CommandArgument {
         return getPlugin().getPlayerManager();
     }
 
+    public RankManager getRankManager() {
+        return getPlugin().getRankManager();
+    }
+
     @Override
     public String getPermission() {
         return "starpvp.command." + getName();
@@ -37,7 +42,7 @@ public abstract class AbstractArgument extends AbstractCommand.CommandArgument {
 
     @Override
     public PermissionDefault getPermissionDefault() {
-        return PermissionDefault.TRUE;
+        return PermissionDefault.OP;
     }
 
     @Override
@@ -47,7 +52,7 @@ public abstract class AbstractArgument extends AbstractCommand.CommandArgument {
 
     @Override
     public boolean allowConsole() {
-        return false;
+        return true;
     }
 
 }

@@ -1,5 +1,6 @@
 package com.github.tezvn.starpvp.core.rank;
 
+import com.github.tezvn.starpvp.api.rank.CompareResult;
 import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 
@@ -22,14 +23,13 @@ public class SPRankImpl implements SPRank {
         this.displayName = displayName;
     }
 
-
     @Override
     public String getId() {
         return this.id;
     }
 
     @Override
-    public long getSP() {
+    public long getElo() {
         return this.sp;
     }
 
@@ -40,25 +40,33 @@ public class SPRankImpl implements SPRank {
 
     @Override
     public SPRank getNext() {
-        return rankManager.getRanks().stream().filter(rank -> rank.getSP() > getSP())
-                .max(Comparator.comparing(SPRank::getSP, Comparator.naturalOrder())).orElse(this);
+        return rankManager.getRanks().stream().filter(rank -> rank.getElo() > getElo())
+                .min(Comparator.comparing(SPRank::getElo, Comparator.naturalOrder())).orElse(this);
     }
 
     @Override
     public SPRank getPrevious() {
-        return rankManager.getRanks().stream().filter(rank -> rank.getSP() > getSP())
-                .min(Comparator.comparing(SPRank::getSP, Comparator.naturalOrder())).orElse(this);
+        return rankManager.getRanks().stream().filter(rank -> rank.getElo() < getElo())
+                .min(Comparator.comparing(SPRank::getElo, Comparator.naturalOrder())).orElse(this);
 
     }
 
     @Override
     public boolean isHighest() {
-        return getNext().getSP() == getSP();
+        return getNext().getElo() == getElo();
     }
 
     @Override
     public boolean isLowest() {
-        return getPrevious().getSP() == getSP();
+        return getPrevious().getElo() == getElo();
     }
 
+    @Override
+    public CompareResult compare(SPRank other) {
+        if (getElo() > other.getElo())
+            return CompareResult.HIGHER;
+        if (getElo() < other.getElo())
+            return CompareResult.LOWER;
+        return CompareResult.EQUAL;
+    }
 }

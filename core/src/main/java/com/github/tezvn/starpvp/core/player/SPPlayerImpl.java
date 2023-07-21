@@ -1,10 +1,14 @@
 package com.github.tezvn.starpvp.core.player;
 
+import com.github.tezvn.starpvp.api.SPPlugin;
+import com.github.tezvn.starpvp.api.player.cooldown.Cooldown;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.utils.MathUtils;
+import com.github.tezvn.starpvp.core.utils.time.TimeUnits;
+import com.github.tezvn.starpvp.core.utils.time.TimeUtils;
 import com.google.common.collect.Maps;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -23,13 +27,11 @@ public class SPPlayerImpl implements SPPlayer {
 
     private long eloPoint;
 
-    private long rankPoint;
-
-    private int penaltyTimes;
-
-    private boolean isPenalty;
-
     private final Map<PlayerStatistic, Long> statistic = Maps.newHashMap();
+
+    private Cooldown cooldown;
+
+    private final Map<UUID, Long> kills = Maps.newHashMap();
 
     public SPPlayerImpl(OfflinePlayer player) {
         this.uniqueId = player.getUniqueId();
@@ -52,18 +54,18 @@ public class SPPlayerImpl implements SPPlayer {
     }
 
     @Override
-    public long getEloPoint() {
-        return this.rankPoint + this.eloPoint;
+    public long getTotalEloPoint() {
+        return this.rank.getElo() + this.eloPoint;
     }
 
-    public long getRawEP() {
+    @Override
+    public long getEloPoint() {
         return this.eloPoint;
     }
 
     @Override
     public void setEloPoint(long eloPoint) {
         this.eloPoint = eloPoint;
-        updateRank();
     }
 
     @Override
@@ -84,7 +86,13 @@ public class SPPlayerImpl implements SPPlayer {
 //            }
 //        }
         this.eloPoint += starPoint;
-        updateRank();
+        if(getRank().isHighest())
+            return;
+        long offset = getTotalEloPoint() - getRank().getNext().getElo();
+        if(offset > 0) {
+            this.eloPoint = offset;
+            this.rank = getRank().getNext();
+        }
     }
 
     @Override
@@ -97,25 +105,17 @@ public class SPPlayerImpl implements SPPlayer {
 //            if (deathPercent >= getPercent("hell-sp.activate"))
 //                eloPoint = (long) (eloPoint + (eloPoint * getMultiplier("hell-sp.multiplier.death")));
 //        }
-        this.eloPoint -= starPoint;
-        updateRank();
-    }
-
-    public void updateRank() {
-        if (this.eloPoint >= 0) {
-            long offset = this.rank.getNext().getSP() - this.rank.getSP();
-            if (this.eloPoint - offset > 0) {
-                this.rank = rank.getNext();
-                this.rankPoint = this.rank.getSP();
-                this.eloPoint = offset - this.eloPoint;
-                addEloPoint(offset - this.eloPoint);
-            }
-        } else {
-            long offset = this.rank.getSP() - this.rank.getPrevious().getSP();
-            this.rank = rank.getPrevious();
-            this.rankPoint = this.rank.getSP();
-            addEloPoint(offset + eloPoint);
+        if(getEloPoint() - starPoint > 0) {
+            this.eloPoint -= starPoint;
+            return;
         }
+        if(getRank().isLowest()) {
+            this.eloPoint = 0;
+            return;
+        }
+        long offset = getRank().getElo() - getRank().getPrevious().getElo();
+        this.eloPoint = offset - starPoint;
+        setRank(getRank().getPrevious());
     }
 
     @Override
@@ -131,7 +131,6 @@ public class SPPlayerImpl implements SPPlayer {
     @Override
     public void setRank(SPRank rank, boolean resetSP) {
         this.rank = rank;
-        this.rankPoint = rank.getSP();
         setEloPoint(resetSP ? 0 : this.eloPoint);
     }
 
@@ -142,38 +141,47 @@ public class SPPlayerImpl implements SPPlayer {
 
     @Override
     public void setStatistic(PlayerStatistic statistic, long value) {
-        if (statistic == PlayerStatistic.TOTAL_COMBAT_TIMES)
-            return;
         this.statistic.put(statistic, Math.max(0, value));
     }
 
     @Override
-    public long getPenaltyTimes() {
-        return this.penaltyTimes;
+    public <T extends Cooldown> T getCooldown() {
+        return (T) cooldown;
     }
 
     @Override
-    public boolean isPenalty() {
-        return isPenalty;
+    public <T extends Cooldown> void setCooldown(T cooldown) {
+        this.cooldown = cooldown;
     }
 
-    public void enterCombatLogout() {
-        if(this.isPenalty())
-            return;
-        this.isPenalty = true;
-        this.penaltyTimes +=1;
+    @Override
+    public void removeCooldown() {
+        this.cooldown = null;
     }
 
-    public void leaveCombatLogOut() {
-        this.isPenalty = false;
+    @Override
+    public Map<UUID, Long> getKillsCooldown() {
+        return this.kills;
     }
 
-    public void setPenaltyTimes(int penaltyTimes) {
-        this.penaltyTimes = penaltyTimes;
+    @Override
+    public long getKillCooldown(OfflinePlayer player) {
+        return this.kills.getOrDefault(player.getUniqueId(), 0L);
     }
 
-    public void setPenalty(boolean penalty) {
-        isPenalty = penalty;
+    @Override
+    public void addKillCooldown(OfflinePlayer player) {
+        SPPlugin plugin = JavaPlugin.getPlugin(SPPluginImpl.class);
+        String duration = plugin.getDocument().getString("cooldown.kill-other", "5m");
+        this.kills.putIfAbsent(player.getUniqueId(), TimeUtils.newInstance().add(duration).getNewTime());
+    }
+
+    public void addKillCooldown(UUID uuid, long time) {
+        this.kills.putIfAbsent(uuid, time);
+    }
+
+    public void removeKillCooldown(OfflinePlayer player) {
+        this.kills.remove(player.getUniqueId());
     }
 
     private double getPercent(String key) {
@@ -181,7 +189,7 @@ public class SPPlayerImpl implements SPPlayer {
                 .getString(key, "60%");
         try {
             return MathUtils.roundDouble((double) Integer.parseInt(str) / 100);
-        }catch (Exception e) {
+        } catch (Exception e) {
             return 0;
         }
     }
@@ -191,8 +199,8 @@ public class SPPlayerImpl implements SPPlayer {
                 .getString(key, "35%");
         try {
             int value = Integer.parseInt(str);
-            return MathUtils.roundDouble(1 - ((double) value /100), 2);
-        }catch (Exception e) {
+            return MathUtils.roundDouble(1 - ((double) value / 100), 2);
+        } catch (Exception e) {
             return 1;
         }
     }
@@ -203,10 +211,15 @@ public class SPPlayerImpl implements SPPlayer {
         map.put("uuid", getUniqueId().toString());
         map.put("name", getPlayerName());
         map.put("rank", getRank().getId());
-        map.put("sp.total", String.valueOf(this.getEloPoint()));
-        map.put("sp.current", String.valueOf(this.eloPoint));
-        map.put("penalty.times", String.valueOf(getPenaltyTimes()));
-        map.put("penalty.activate", String.valueOf(this.isPenalty()));
+        map.put("elo.total", String.valueOf(this.getTotalEloPoint()));
+        map.put("elo.current", String.valueOf(this.getEloPoint()));
+        statistic.forEach((type, value) -> map.put("statistic." + type.name(), value));
+        if (getCooldown() != null) {
+            map.put("cooldown.type", getCooldown().getType().name());
+            map.put("cooldown.start", getCooldown().getStartTime());
+            map.put("cooldown.end", getCooldown().getEndTime());
+        }
+        kills.forEach((uuid, value) -> map.put("kills-cooldown." + uuid.toString(), value));
         return map;
     }
 

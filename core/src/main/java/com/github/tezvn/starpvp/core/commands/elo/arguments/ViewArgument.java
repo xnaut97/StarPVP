@@ -1,4 +1,4 @@
-package com.github.tezvn.starpvp.core.commands.arguments;
+package com.github.tezvn.starpvp.core.commands.elo.arguments;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
@@ -10,7 +10,7 @@ import org.bukkit.permissions.PermissionDefault;
 
 import java.util.List;
 
-public class ViewArgument extends AbstractArgument{
+public class ViewArgument extends EloArgument {
 
     public ViewArgument(SPPlugin plugin) {
         super(plugin);

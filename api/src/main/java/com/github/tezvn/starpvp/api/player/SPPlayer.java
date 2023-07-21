@@ -1,8 +1,11 @@
 package com.github.tezvn.starpvp.api.player;
 
+import com.github.tezvn.starpvp.api.player.cooldown.Cooldown;
+import com.github.tezvn.starpvp.api.player.cooldown.CooldownType;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import org.bukkit.OfflinePlayer;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -13,6 +16,8 @@ public interface SPPlayer {
     String getPlayerName();
 
     OfflinePlayer getPlayer();
+
+    long getTotalEloPoint();
 
     long getEloPoint();
 
@@ -32,9 +37,19 @@ public interface SPPlayer {
 
     void setStatistic(PlayerStatistic statistic, long value);
 
-    long getPenaltyTimes();
+    <T extends Cooldown> T getCooldown();
 
-    boolean isPenalty();
+    <T extends Cooldown> void setCooldown(T cooldown);
+
+    void removeCooldown();
+
+    Map<UUID, Long> getKillsCooldown();
+
+    long getKillCooldown(OfflinePlayer player);
+
+    void addKillCooldown(OfflinePlayer player);
+
+    void removeKillCooldown(OfflinePlayer player);
 
     Map<String, Object> serialize();
 

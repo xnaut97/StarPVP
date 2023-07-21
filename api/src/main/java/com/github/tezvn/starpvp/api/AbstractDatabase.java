@@ -1,25 +1,27 @@
 package com.github.tezvn.starpvp.api;
 
 import com.google.common.collect.Lists;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import org.bukkit.plugin.Plugin;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
-
-import org.bukkit.plugin.Plugin;
+import java.util.stream.Collectors;
 
 public abstract class AbstractDatabase {
 
-    private Plugin plugin;
+    private final Plugin plugin;
 
-    private String username;
+    private final String username;
 
     private String password;
 
-    private String name;
+    private final String name;
 
     private String host;
 
@@ -67,27 +69,45 @@ public abstract class AbstractDatabase {
     public static abstract class DeprecatedDatabase extends AbstractDatabase {
         private final String port;
 
-        private Connection connection;
+        private final HikariConfig hikariConfig;
 
-        public DeprecatedDatabase(Plugin plugin, String username, String password, String name, String host, String port) {
+        private HikariDataSource dataSource;
+
+        public DeprecatedDatabase(Plugin plugin, String username, String password, String name, String host, String port, int poolSize, int timeout, int idleTimeout, int lifeTime) {
             super(plugin, username, password, name, host);
             this.port = port;
+
+            hikariConfig = new HikariConfig();
+            String url = "jdbc:mysql://" + getHost() + (getPort().equalsIgnoreCase("default") ? ":3306" : ":" + getPort()) + "/" + getName();
+            hikariConfig.setJdbcUrl(url);
+            hikariConfig.setUsername(getUsername());
+            hikariConfig.setPassword(getPassword());
+            hikariConfig.setMaximumPoolSize(poolSize);
+            hikariConfig.setConnectionTimeout(timeout);
+            hikariConfig.setIdleTimeout(idleTimeout);
+            hikariConfig.setMaxLifetime(lifeTime);
+
             connect();
+        }
+
+        public HikariDataSource getDataSource(){
+            return dataSource;
         }
 
         public String getPort() {
             return this.port;
         }
 
-        public Connection getConnection() {
-            return this.connection;
+        public Connection getConnection() throws SQLException {
+            return dataSource.getConnection();
         }
 
         public void connect() {
             try {
                 getPlugin().getLogger().info("Connecting to database...");
-                String url = "jdbc:mysql://" + getHost() + (getPort().equalsIgnoreCase("default") ? ":3306" : ":" + getPort()) + "/" + getName();
-                this.connection = DriverManager.getConnection(url, getUsername(), getPassword());
+
+                dataSource = new HikariDataSource(hikariConfig);
+
                 getPlugin().getLogger().info("Connected to database success!");
                 setConnected(true);
             } catch (Exception e) {
@@ -99,7 +119,9 @@ public abstract class AbstractDatabase {
             try {
                 if (hasDatabase(databaseName))
                     return false;
-                this.connection.createStatement().executeUpdate("CREATE DATABASE " + databaseName);
+                try (Connection connection = getConnection()){
+                    connection.createStatement().executeUpdate("CREATE DATABASE " + databaseName);
+                }
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -108,8 +130,8 @@ public abstract class AbstractDatabase {
         }
 
         public boolean hasDatabase(String databaseName) {
-            try {
-                ResultSet set = this.connection.getMetaData().getCatalogs();
+            try (Connection connection = getConnection()){
+                ResultSet set = connection.getMetaData().getCatalogs();
                 boolean exist = false;
                 while (set.next()) {
                     String name = set.getString(1);
@@ -127,9 +149,9 @@ public abstract class AbstractDatabase {
 
         public boolean createTable(String name, DatabaseElement... elements) {
             try {
-                if (!isConnected() || hasTable(name))
+                if (!isConnected())
                     return false;
-                StringBuilder builder = new StringBuilder("CREATE TABLE `" + name + "` (");
+                StringBuilder builder = new StringBuilder("CREATE TABLE IF NOT EXISTS `" + name + "` (");
                 for (DatabaseElement element : elements) {
                     StringBuilder typeBuilder = new StringBuilder(element.getType().name().replace("_", ""));
                     if (element.getType() == DatabaseElement.Type.VAR_CHAR)
@@ -139,7 +161,9 @@ public abstract class AbstractDatabase {
                 }
                 builder.delete(builder.length() - 2, builder.length());
                 builder.append(");");
-                this.connection.createStatement().executeUpdate(builder.toString());
+                Connection connection = getConnection();
+                connection.createStatement().executeUpdate(builder.toString());
+                connection.close();
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -147,20 +171,9 @@ public abstract class AbstractDatabase {
             }
         }
 
-        public boolean hasTable(String name) {
-            if (this.connection == null)
-                return false;
-            try {
-                return this.connection.getMetaData().getTables(null, null, name, null).next();
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return false;
-            }
-        }
-
         public List<String> getTables() {
             try {
-                ResultSet rs = this.connection.getMetaData().getTables(null, null, "%", null);
+                ResultSet rs = getConnection().getMetaData().getTables(null, null, "%", null);
                 List<String> list = Lists.newArrayList();
                 while (rs.next())
                     list.add(rs.getString(3));
@@ -172,9 +185,10 @@ public abstract class AbstractDatabase {
         }
 
         public boolean has(String table, String toFind, String key, Object value) {
-            try {
+            try (Connection connection = getConnection()){
                 String query = "SELECT `" + toFind + "` FROM `" + table + "` WHERE `" + key + "`='" + value + "'";
-                return this.connection.createStatement().executeQuery(query).next();
+
+                return connection.createStatement().executeQuery(query).next();
             } catch (Exception e) {
                 e.printStackTrace();
                 return false;
@@ -182,23 +196,12 @@ public abstract class AbstractDatabase {
         }
 
         public boolean add(String table, DatabaseInsertion... insertions) {
-            try {
-                StringBuilder query = new StringBuilder("INSERT INTO `" + table + "`(");
-                StringBuilder queryKey = new StringBuilder();
-                StringBuilder queryValue = new StringBuilder();
-                for (DatabaseInsertion insertion : insertions) {
-                    queryKey.append(insertion.getKey()).append(", ");
-                    queryValue.append("?, ");
-                }
-                queryKey = new StringBuilder(queryKey.substring(0, queryKey.length() - 2));
-                queryValue = new StringBuilder(queryValue.substring(0, queryValue.length() - 2));
+            try (Connection connection = getConnection()){
+                StringBuilder query = new StringBuilder("INSERT INTO `" + table + "` (");
+                String queryKey = Arrays.stream(insertions).map(i -> "`" + i.getKey() + "`").collect(Collectors.joining(", "));
+                String queryValue = Arrays.stream(insertions).map(i -> "'" + i.getValue() + "'").collect(Collectors.joining(", "));
                 query.append(queryKey).append(") VALUES (").append(queryValue).append(")");
-                PreparedStatement statement = this.connection.prepareStatement(query.toString());
-                for (int i = 0; i < insertions.length; i++) {
-                    DatabaseInsertion e = insertions[i];
-                    statement.setObject(i + 1, e.getValue());
-                }
-                statement.executeUpdate();
+                connection.prepareStatement(query.toString()).executeUpdate();
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -216,9 +219,9 @@ public abstract class AbstractDatabase {
         }
 
         public boolean remove(String table, String key, Object value) {
-            try {
+            try (Connection connection = getConnection()){
                 String query = "DELETE FROM `" + table + "` WHERE `" + key + "`='" + value + "'";
-                this.connection.createStatement().executeUpdate(query);
+                connection.createStatement().executeUpdate(query);
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -227,13 +230,13 @@ public abstract class AbstractDatabase {
         }
 
         public boolean update(String table, DatabaseInsertion toUpdate, DatabaseInsertion... insertions) {
-            try {
+            try (Connection connection = getConnection()){
                 StringBuilder query = new StringBuilder("UPDATE `" + table + "` SET ");
                 for (DatabaseInsertion e : insertions)
                     query.append("`").append(e.getKey()).append("`='").append(e.getValue()).append("', ");
                 query.delete(query.length() - 2, query.length()).append(" ");
-                query.append("WHERE `").append(toUpdate.getKey()).append("`='").append(toUpdate.getValue()).append("'");
-                this.connection.createStatement().executeUpdate(query.toString());
+                query.append("WHERE `").append(toUpdate.getKey()).append("`='").append(toUpdate.getValue()).append("';");
+                connection.createStatement().executeUpdate(query.toString());
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -241,38 +244,11 @@ public abstract class AbstractDatabase {
             }
         }
 
-        public ResultSet getData(String table) {
-            if (!isConnected())
-                return null;
-            try {
-                PreparedStatement statement = getConnection().prepareStatement("SELECT * FROM " + table);
-                return statement.executeQuery();
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-        public ResultSet find(String table, String key, Object value) {
-            if (!isConnected())
-                return null;
-            try {
-                PreparedStatement statement = getConnection().prepareStatement(
-                        "SELECT * FROM " + table + " WHERE " + key + "=?");
-                if(value instanceof String)
-                    statement.setString(1, String.valueOf(value));
-                return statement.executeQuery();
-            }catch (Exception e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
     }
 
     public static class MySQL extends DeprecatedDatabase {
-        public MySQL(Plugin plugin, String username, String password, String name, String host, String port) {
-            super(plugin, username, password, name, host, port);
+        public MySQL(Plugin plugin, String username, String password, String name, String host, String port, int poolSize, int timeout, int idleTimeout, int lifeTime) {
+            super(plugin, username, password, name, host, port, poolSize, timeout, idleTimeout, lifeTime);
         }
     }
 

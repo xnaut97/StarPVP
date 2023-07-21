@@ -15,15 +15,21 @@ import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.SimplePluginManager;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarInputStream;
 import java.util.stream.Collectors;
 
 /**
- @author TezVN
+ * @author TezVN
  */
 public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
 
@@ -37,7 +43,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
 
     private String noSubCommandFoundMessage = "&cCommand not found, please use /" + getName() + " help for more.";
 
-    private String noConsoleAllowMessage = "&cThis command is for console only.";
+    private String noConsoleAllowMessage = "&cThis command is for player only.";
 
     private String helpHeader;
 
@@ -56,11 +62,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                         .collect(Collectors.toList()));
         this.plugin = plugin;
         this.helpHeader = "- - - - - - - - - -=[ " + plugin.getName() + " ]=- - - - - - - - - -";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < plugin.getName().length(); i++) {
-            sb.append("❘");
-        }
-        this.helpFooter = "- - - - - - - - - -=[ " + sb + " ]=- - - - - - - - - -";
+        this.helpFooter = "- - - - - - - - - -=[ " + "❘".repeat(plugin.getName().length()) + " ]=- - - - - - - - - -";
     }
 
     public T getPlugin() {
@@ -72,7 +74,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
     }
 
     @Override
-    public boolean execute(CommandSender sender, String commandLabel, String[] args) {
+    public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
         if (sender instanceof ConsoleCommandSender) {
             if (args.length == 0)
                 onSingleExecute(sender);
@@ -82,11 +84,11 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                         .filter(entry -> entry.getKey().equalsIgnoreCase(name))
                         .map(Map.Entry::getValue).findAny().orElse(null);
                 if (command == null) {
-                    sender.sendMessage(this.noSubCommandFoundMessage);
+                    sender.sendMessage(this.noSubCommandFoundMessage.replace("&", "§"));
                     return true;
                 }
                 if (!command.allowConsole()) {
-                    sender.sendMessage(this.noConsoleAllowMessage);
+                    sender.sendMessage(this.noConsoleAllowMessage.replace("&", "§"));
                     return true;
                 }
                 command.consoleExecute((ConsoleCommandSender) sender, Arrays.copyOfRange(args, 1, args.length));
@@ -104,7 +106,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                     .filter(entry -> entry.getKey().equalsIgnoreCase(name))
                     .map(Map.Entry::getValue).findAny().orElse(null);
             if (command == null) {
-                sender.sendMessage(this.noSubCommandFoundMessage);
+                sender.sendMessage(this.noSubCommandFoundMessage.replace("&", "§"));
                 return true;
             }
             String permission = command.getPermission();
@@ -113,7 +115,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                 return true;
             }
             if (!player.hasPermission(command.getPermission())) {
-                sender.sendMessage(this.noPermissionsMessage);
+                sender.sendMessage(this.noPermissionsMessage.replace("&", "§"));
                 return true;
             }
             command.playerExecute(player, Arrays.copyOfRange(args, 1, args.length));
@@ -121,8 +123,9 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
         return true;
     }
 
+    @NotNull
     @Override
-    public List<String> tabComplete(CommandSender sender, String alias, String[] args)
+    public List<String> tabComplete(@NotNull CommandSender sender, @NotNull String alias, @NotNull String[] args)
             throws IllegalArgumentException {
         return new CommandCompleter(this).onTabComplete(sender, args);
     }
@@ -132,17 +135,17 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
      *
      * @param commands Sub command to add
      */
-    public void addSubCommand(CommandArgument... commands) {
+    public void registerArguments(CommandArgument... commands) {
         for (CommandArgument command : commands) {
-            if(command.getName() == null || command.getName().isEmpty())
+            if (command.getName() == null || command.getName().isEmpty())
                 continue;
             this.subCommands.putIfAbsent(command.getName(), command);
-            if(command.getAliases() != null && !command.getAliases().isEmpty()) {
+            if (command.getAliases() != null && !command.getAliases().isEmpty()) {
                 for (String alias : command.getAliases()) {
                     this.subCommands.putIfAbsent(alias, command);
                 }
             }
-            if(command.getPermission() == null)
+            if (command.getPermission() == null)
                 continue;
             registerPermission(command);
         }
@@ -162,7 +165,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
             Field field = SimplePluginManager.class.getDeclaredField("permissions");
             field.setAccessible(true);
             return (Map<String, Permission>) field.get(pluginManager);
-        }catch (Exception e) {
+        } catch (Exception e) {
             return Collections.emptyMap();
         }
     }
@@ -174,7 +177,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                     "calculatePermissionDefault", Permission.class, boolean.class);
             method.setAccessible(true);
             method.invoke(pluginManager, permission, true);
-        }catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -184,7 +187,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
      */
     public void register() {
         try {
-            addSubCommand(new AbstractHelpCommand(this));
+            registerArguments(new AbstractHelpCommand(this));
             if (!getKnownCommands().containsKey(getName())) {
                 getKnownCommands().put(getName(), this);
                 getKnownCommands().put(plugin.getDescription().getName().toLowerCase() + ":" + getName(), this);
@@ -204,16 +207,17 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
     /**
      * Unregister command from server in {@code onDisable()} method
      */
+    @SuppressWarnings("unchecked")
     public void unregister() {
         try {
             unregister(getCommandMap());
             getKnownCommands().entrySet().removeIf(entry -> {
-                if(!(entry.getValue() instanceof AbstractCommand))
+                if (!(entry.getValue() instanceof AbstractCommand))
                     return false;
                 AbstractCommand<T> command = (AbstractCommand<T>) entry.getValue();
                 command.getSubCommands().forEach((name, commandArgument) -> {
                     String permission = commandArgument.getPermission();
-                    if(permission == null || !permission.isEmpty())
+                    if (permission == null || !permission.isEmpty())
                         return;
                     getPermissionMap().remove(permission);
                 });
@@ -261,7 +265,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
      *
      * @param noPermissionsMessage Message to set
      */
-    public AbstractCommand setNoPermissionsMessage(String noPermissionsMessage) {
+    public AbstractCommand<?> setNoPermissionsMessage(String noPermissionsMessage) {
         this.noPermissionsMessage = noPermissionsMessage;
         return this;
     }
@@ -271,7 +275,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
      *
      * @param noSubCommandFoundMessage Message to set
      */
-    public AbstractCommand setNoSubCommandFoundMessage(String noSubCommandFoundMessage) {
+    public AbstractCommand<?> setNoSubCommandFoundMessage(String noSubCommandFoundMessage) {
         this.noSubCommandFoundMessage = noSubCommandFoundMessage;
         return this;
     }
@@ -281,7 +285,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
      *
      * @param noConsoleAllowMessage Message to set
      */
-    public AbstractCommand setNoConsoleAllowMessage(String noConsoleAllowMessage) {
+    public AbstractCommand<?> setNoConsoleAllowMessage(String noConsoleAllowMessage) {
         this.noConsoleAllowMessage = noConsoleAllowMessage;
         return this;
     }
@@ -290,7 +294,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
         return helpSuggestions;
     }
 
-    public AbstractCommand setHelpSuggestions(int helpSuggestions) {
+    public AbstractCommand<?> setHelpSuggestions(int helpSuggestions) {
         this.helpSuggestions = Math.max(5, helpSuggestions);
         return this;
     }
@@ -299,7 +303,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
         return this.helpHeader;
     }
 
-    public AbstractCommand setHelpHeader(String helpHeader) {
+    public AbstractCommand<?> setHelpHeader(String helpHeader) {
         this.helpHeader = helpHeader;
         return this;
     }
@@ -308,7 +312,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
         return this.helpFooter;
     }
 
-    public AbstractCommand setHelpFooter(String helpFooter) {
+    public AbstractCommand<?> setHelpFooter(String helpFooter) {
         this.helpFooter = helpFooter;
         return this;
     }
@@ -317,11 +321,11 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
         return helpCommandColor == null ? "&a" : this.helpCommandColor;
     }
 
-    public AbstractCommand setHelpCommandColor(ChatColor color) {
+    public AbstractCommand<?> setHelpCommandColor(ChatColor color) {
         return setHelpCommandColor(String.valueOf(color.getChar()));
     }
 
-    public AbstractCommand setHelpCommandColor(String color) {
+    public AbstractCommand<?> setHelpCommandColor(String color) {
         this.helpCommandColor = color;
         return this;
     }
@@ -330,11 +334,11 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
         return helpDescriptionColor == null ? "&7" : this.helpDescriptionColor;
     }
 
-    public AbstractCommand setHelpDescriptionColor(ChatColor color) {
+    public AbstractCommand<?> setHelpDescriptionColor(ChatColor color) {
         return setHelpCommandColor(String.valueOf(color.getChar()));
     }
 
-    public AbstractCommand setHelpDescriptionColor(String color) {
+    public AbstractCommand<?> setHelpDescriptionColor(String color) {
         this.helpDescriptionColor = color;
         return this;
     }
@@ -351,9 +355,6 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
     public static abstract class CommandArgument {
 
         private final Map<String, Boolean> childrens = Maps.newHashMap();
-
-        public CommandArgument() {
-        }
 
         public Map<String, Boolean> getChildPermissions() {
             return Collections.unmodifiableMap(this.childrens);
@@ -443,38 +444,37 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
 
         private final Map<String, CommandArgument> commands;
 
-        protected CommandCompleter(AbstractCommand handle) {
+        protected CommandCompleter(AbstractCommand<?> handle) {
             this.commands = handle.getSubCommands();
         }
 
         private List<CommandArgument> getCommands(CommandSender sender, String start) {
             return this.commands.values().stream().filter(command -> {
-                if(!command.getName().startsWith(start))
+                if (!command.getName().startsWith(start))
                     return false;
-                boolean hasPermission = command.getPermission() == null || !command.getPermission().isEmpty();
-                return !hasPermission || sender.hasPermission(command.getPermission());
+                if (command.getPermission() == null || command.getPermission().length() == 0)
+                    return true;
+                return sender.hasPermission(command.getPermission());
             }).collect(Collectors.toList());
         }
 
         public List<String> onTabComplete(CommandSender sender, String[] args) {
-            if(args.length == 0)
+            if (args.length == 0)
                 return null;
             List<CommandArgument> commands = getCommands(sender, args[0]);
-            if(!commands.isEmpty()) {
-                if (args.length == 1)
-                    return commands.stream().map(CommandArgument::getName).collect(Collectors.toList());
-                else {
-                    CommandArgument found = commands.stream().filter(c -> {
-                        boolean matchAlias = false;
-                        if (!c.getAliases().isEmpty())
-                            matchAlias = c.getAliases().stream().anyMatch(alias -> alias.equalsIgnoreCase(args[0]));
-                        return c.getName().equalsIgnoreCase(args[0]) || matchAlias;
-                    }).findAny().orElse(null);
-                    if (found != null)
-                        return found.tabComplete(sender, args);
-                }
-            }
-            return null;
+            if (commands.isEmpty())
+                return null;
+            if (args.length == 1)
+                return commands.stream().map(CommandArgument::getName).collect(Collectors.toList());
+            CommandArgument argument = commands.stream().filter(c -> {
+                boolean matchAlias = false;
+                if (!c.getAliases().isEmpty())
+                    matchAlias = c.getAliases().stream().anyMatch(alias -> alias.equalsIgnoreCase(args[0]));
+                return c.getName().equalsIgnoreCase(args[0]) || matchAlias;
+            }).findAny().orElse(null);
+            if(argument == null)
+                return null;
+            return argument.tabComplete(sender, Arrays.copyOfRange(args, 1, args.length));
         }
     }
 
@@ -482,9 +482,9 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
 
         private final Map<String, CommandArgument> subCommands;
 
-        private final AbstractCommand handle;
+        private final AbstractCommand<?> handle;
 
-        public AbstractHelpCommand(AbstractCommand handle) {
+        public AbstractHelpCommand(AbstractCommand<?> handle) {
             this.handle = handle;
             this.subCommands = handle.getSubCommands();
         }
@@ -531,7 +531,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
 
         @Override
         public void playerExecute(Player sender, String[] args) {
-            if (args.length == 1) {
+            if (args.length == 0) {
                 handleCommands(sender, 0);
                 return;
             }
@@ -541,7 +541,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
 
         @Override
         public void consoleExecute(ConsoleCommandSender sender, String[] args) {
-            if (args.length == 1) {
+            if (args.length == 0) {
                 handleCommands(sender, 0);
                 return;
             }
@@ -575,21 +575,20 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
             List<CommandArgument> filter = subCommands.values().stream().filter(command -> {
                 boolean hasPermission = command.getPermission() != null || !command.getPermission().isEmpty();
                 return !hasPermission || sender.hasPermission(command.getPermission());
-            }).collect(Collectors.toList());
+            }).toList();
             int max = Math.min(handle.getHelpSuggestions() * (page + 1), filter.size());
             if (handle.getHelpHeader() != null)
-                sender.sendMessage(handle.getHelpHeader());
+                sender.sendMessage(handle.getHelpHeader().replace("&", "§"));
             for (int i = page * handle.getHelpSuggestions(); i < max; i++) {
                 CommandArgument command = filter.get(i);
                 TextComponent clickableCommand = createClickableCommand(command);
                 if (sender instanceof Player)
                     ((Player) sender).spigot().sendMessage(clickableCommand);
                 else
-                    sender.sendMessage(handle.getHelpCommandColor() + "/" + handle.getUsage() + ": "
-                            + handle.getHelpDescriptionColor() + command.getDescription());
+                    sender.sendMessage((handle.getHelpCommandColor() + "/" + command.getUsage() + ": "
+                            + handle.getHelpDescriptionColor() + command.getDescription()).replace("&", "§"));
             }
-            if (sender instanceof Player) {
-                Player player = (Player) sender;
+            if (sender instanceof Player player) {
                 TextComponent previousPage = createClickableButton("&e&l«",
                         "/" + handle.getName() + " help " + (page - 1),
                         "&7Previous page");
@@ -614,7 +613,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                 }
             }
             if (handle.getHelpFooter() != null)
-                sender.sendMessage(handle.getHelpFooter());
+                sender.sendMessage(handle.getHelpFooter().replace("&", "§"));
         }
 
         private TextComponent createClickableCommand(CommandArgument command) {

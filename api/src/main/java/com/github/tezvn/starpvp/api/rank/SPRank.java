@@ -4,7 +4,7 @@ public interface SPRank {
 
     String getId();
 
-    long getSP();
+    long getElo();
 
     String getDisplayName();
 
@@ -15,5 +15,7 @@ public interface SPRank {
     boolean isHighest();
 
     boolean isLowest();
+
+    CompareResult compare(SPRank other);
 
 }

@@ -1,23 +1,27 @@
 package com.github.tezvn.starpvp.core.player;
 
 import com.cryptomorin.xseries.XSound;
+import com.destroystokyo.paper.event.player.PlayerArmorChangeEvent;
 import com.github.tezvn.starpvp.api.AbstractDatabase.DatabaseInsertion;
 import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
-import com.github.tezvn.starpvp.api.player.CombatCooldown;
+import com.github.tezvn.starpvp.api.player.cooldown.Cooldown;
+import com.github.tezvn.starpvp.api.player.cooldown.CooldownType;
+import com.github.tezvn.starpvp.api.player.cooldown.LogoutCooldown;
+import com.github.tezvn.starpvp.api.player.cooldown.DeathCooldown;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.api.rank.SPRank;
-import com.github.tezvn.starpvp.core.handler.AbstractHandler;
-import com.github.tezvn.starpvp.core.handler.CombatHandler;
-import com.github.tezvn.starpvp.core.handler.CooldownHandler;
-import com.github.tezvn.starpvp.core.handler.PenaltyHandler;
+import com.github.tezvn.starpvp.core.player.cooldown.LogoutCooldownImpl;
+import com.github.tezvn.starpvp.core.player.cooldown.DeathCooldownImpl;
+import com.github.tezvn.starpvp.core.rank.SPRankImpl;
 import com.github.tezvn.starpvp.core.utils.GsonHelper;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
 import com.github.tezvn.starpvp.core.utils.WGUtils;
 import com.github.tezvn.starpvp.core.utils.time.TimeUnits;
 import com.github.tezvn.starpvp.core.utils.time.TimeUtils;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -35,11 +39,12 @@ import org.bukkit.event.player.*;
 import org.bukkit.potion.PotionEffectType;
 
 import java.io.File;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
-
-import static com.github.tezvn.starpvp.core.handler.AbstractHandler.*;
+import java.util.stream.Collectors;
 
 public class PlayerManagerImpl implements PlayerManager, Listener {
 
@@ -47,23 +52,16 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private final SPPlugin plugin;
 
-    private final Map<UUID, Long> combatTimestamp = Maps.newHashMap();
-
-    private final Map<UUID, CombatCooldown> combatCooldown = Maps.newHashMap();
-
-    private final Map<UUID, Long> combatPenalty = Maps.newHashMap();
-
     private String lobbyId;
-
-    private final Map<Type, AbstractHandler<?>> handler = Maps.newHashMap();
 
     private final Map<UUID, Integer> killStreaks = Maps.newHashMap();
 
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
-        registerHandler();
+        new PlayerHandler(this);
         registerOnline();
         loadLobby();
+        loadFromDatabase();
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -77,18 +75,9 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
                 this.players.computeIfAbsent(player.getUniqueId(), uuid -> {
                     SPPlayer spPlayer = new SPPlayerImpl(player);
                     spPlayer.setRank(plugin.getRankManager().getLowestRank());
+                    saveToDatabase(player);
                     return spPlayer;
                 });
-        });
-    }
-
-    private void registerHandler() {
-        Arrays.stream(Type.values()).forEach(type -> {
-            switch (type) {
-                case COOLDOWN -> this.handler.putIfAbsent(type, new CooldownHandler(this));
-                case PENALTY -> this.handler.putIfAbsent(type, new PenaltyHandler(this));
-                case COMBAT -> this.handler.putIfAbsent(type, new CombatHandler(this));
-            }
         });
     }
 
@@ -100,18 +89,6 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @Override
     public SPPlayer getPlayer(OfflinePlayer player) {
         return getPlayer(player.getUniqueId());
-    }
-
-    public Map<UUID, CombatCooldown> getCombatCooldown() {
-        return combatCooldown;
-    }
-
-    public Map<UUID, Long> getCombatTimestamp() {
-        return combatTimestamp;
-    }
-
-    public Map<UUID, Long> getCombatPenalty() {
-        return combatPenalty;
     }
 
     @Override
@@ -126,50 +103,101 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         return this.players.getOrDefault(uniqueId, null);
     }
 
+    private void loadFromDatabase() {
+        MySQL database = getPlugin().getDatabase();
+        if (database != null && database.isConnected()) {
+            String tableName = getPlugin().getDocument().getString("database.table-name", "user");
+            try (Connection connection = plugin.getDatabase().getConnection()) {
+                PreparedStatement statement = connection.prepareStatement("SELECT * FROM " + tableName);
+                ResultSet rs = statement.executeQuery();
+                while (rs.next()) {
+                    UUID uuid = UUID.fromString(rs.getString("uuid"));
+                    SPPlayer spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
+                    SPRank rank = getPlugin().getRankManager().getRank(rs.getString("rank"));
+                    if (rank == null)
+                        rank = getPlugin().getRankManager().getLowestRank();
+                    spPlayer.setRank(rank);
+                    spPlayer.setEloPoint(Integer.parseInt(rs.getString("elo")));
+                    Arrays.stream(rs.getString("statistic").split(",")).forEach(s -> {
+                        String[] split = s.split(":");
+                        PlayerStatistic statistic = PlayerStatistic.valueOf(split[0]);
+                        spPlayer.setStatistic(statistic, Long.parseLong(split[1]));
+                    });
+                    String cdData = rs.getString("cooldown");
+                    if (!cdData.isEmpty()) {
+                        String[] cooldownData = cdData.split(",");
+                        if (cooldownData.length == 3) {
+                            CooldownType cooldownType = CooldownType.valueOf(cooldownData[0]);
+                            Cooldown cooldown = null;
+                            switch (cooldownType) {
+                                case COMBAT_DEATH -> {
+                                    cooldown = new DeathCooldownImpl(Long.parseLong(cooldownData[1]), Long.parseLong(cooldownData[2]));
+                                }
+                                case COMBAT_LOGOUT -> {
+                                    cooldown = new LogoutCooldownImpl(Long.parseLong(cooldownData[1]), Long.parseLong(cooldownData[2]));
+                                }
+                            }
+                            spPlayer.setCooldown(cooldown);
+                        }
+                    }
+
+                    String kcData = rs.getString("kills_cooldown");
+                    if (!kcData.isEmpty()) {
+                        Arrays.stream(kcData.split(",")).forEach(s -> {
+                            String[] split = s.split(":");
+                            ((SPPlayerImpl) spPlayer).addKillCooldown(UUID.fromString(split[0]), Long.parseLong(split[1]));
+                        });
+                    }
+                    this.players.put(uuid, spPlayer);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     @Override
     public void saveToDatabase(UUID uuid) {
         SPPlayer spPlayer = getPlayer(uuid);
         if (spPlayer == null)
             return;
-        Map<String, Object> map = spPlayer.serialize();
-        CombatCooldown cooldown = this.combatCooldown.getOrDefault(uuid, null);
-        if (cooldown != null) {
-            map.put("cooldown.start-time", String.valueOf(cooldown.getStartTime()));
-            map.put("cooldown.end-time", String.valueOf(cooldown.getStartTime()));
-            map.put("cooldown.until", TimeUtils.format(cooldown.getEndTime()));
-        }
-        long timestamp = this.combatTimestamp.getOrDefault(uuid, -1L);
-        if (timestamp != -1)
-            map.put("combat-since", String.valueOf(timestamp));
-        long penaltyTime = this.combatPenalty.getOrDefault(uuid, -1L);
-        if (penaltyTime != -1)
-            map.put("penalty.until", String.valueOf(penaltyTime));
-
         MySQL database = getPlugin().getDatabase();
         if (database != null && database.isConnected()) {
             String tableName = getPlugin().getDocument().getString("database.table-name", "user");
-            if (!database.hasTable(tableName))
-                return;
-            database.addOrUpdate(tableName,
-                    new DatabaseInsertion("uuid", uuid.toString()),
+            List<DatabaseInsertion> insertions = Lists.newArrayList();
+            insertions.add(new DatabaseInsertion("uuid", spPlayer.getUniqueId().toString()));
+            insertions.add(new DatabaseInsertion("player_name", spPlayer.getPlayerName()));
+            insertions.add(new DatabaseInsertion("rank", spPlayer.getRank().getId()));
+            insertions.add(new DatabaseInsertion("elo", String.valueOf(spPlayer.getEloPoint())));
+            insertions.add(new DatabaseInsertion("statistic", Arrays.stream(PlayerStatistic.values())
+                    .map(statistic -> statistic.name() + ":" + spPlayer.getStatistic(statistic))
+                    .collect(Collectors.joining(","))));
+            if (spPlayer.getCooldown() != null) {
+                Cooldown cooldown = spPlayer.getCooldown();
+                insertions.add(new DatabaseInsertion("cooldown", cooldown.getType().name() + "," + cooldown.getStartTime() + "," + cooldown.getEndTime()));
+            } else
+                insertions.add(new DatabaseInsertion("cooldown", ""));
+            insertions.add(new DatabaseInsertion("kills_cooldown", spPlayer.getKillsCooldown().entrySet().stream()
+                    .map(entry -> entry.getKey().toString() + ":" + entry.getValue())
+                    .collect(Collectors.joining(","))));
 
-                    new DatabaseInsertion("uuid", uuid.toString()),
-                    new DatabaseInsertion("player_name", spPlayer.getPlayerName()),
-                    new DatabaseInsertion("data", GsonHelper.encode(map)));
+            database.addOrUpdate(tableName,
+                    new DatabaseInsertion("uuid", uuid.toString()), //Player to update
+                    insertions.toArray(new DatabaseInsertion[0]));
         } else
-            saveToLocal(map);
+            saveToLocal(spPlayer);
     }
 
-    private void saveToLocal(Map<String, Object> map) {
+    private void saveToLocal(SPPlayer spPlayer) {
         try {
             File folder = new File(plugin.getDataFolder() + "/users");
             if (!folder.exists())
                 folder.mkdirs();
-            File file = new File(plugin.getDataFolder() + "/users/" + map.get("uuid") + ".yml");
+            File file = new File(plugin.getDataFolder() + "/users/" + spPlayer.getUniqueId().toString() + ".yml");
             if (!file.exists())
                 file.createNewFile();
             FileConfiguration config = YamlConfiguration.loadConfiguration(file);
-            map.forEach(config::set);
+            spPlayer.serialize().forEach(config::set);
             config.save(file);
         } catch (Exception e) {
             e.printStackTrace();
@@ -189,44 +217,51 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @SuppressWarnings("unchecked")
     @Override
     public SPPlayer loadFromDatabase(UUID uuid) {
-        SPPlayer spPlayer = null;
         MySQL database = getPlugin().getDatabase();
         if (database != null && database.isConnected()) {
             String tableName = getPlugin().getDocument().getString("database.table-name", "user");
-            if (!database.hasTable(tableName))
-                return null;
-            ResultSet set = database.find(tableName, "uuid", uuid.toString());
-            try {
-                while (set.next()) {
-                    spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
-                    Map<String, String> map = (Map<String, String>) GsonHelper.decode(set.getString("data"));
-                    SPRank rank = plugin.getRankManager().getRank(map.get("rank"));
-                    if (rank == null)
-                        rank = plugin.getRankManager().getLowestRank();
-                    spPlayer.setRank(rank);
-                    spPlayer.setEloPoint(Long.parseLong(map.get("sp.current")));
-                    ((SPPlayerImpl) spPlayer).setPenaltyTimes(Integer.parseInt(map.get("penalty.times")));
-                    ((SPPlayerImpl) spPlayer).setPenalty(Boolean.parseBoolean(map.get("penalty.activate")));
-                    boolean hasCooldown = map.keySet().stream().anyMatch(key -> key.startsWith("cooldown."));
-                    if (hasCooldown) {
-                        long startTime = Long.parseLong(map.get("cooldown.start-time"));
-                        long endTime = Long.parseLong(map.get("cooldown.end-time"));
-                        this.combatCooldown.put(uuid, new CombatCooldownImpl(spPlayer, startTime, endTime));
+            try (Connection connection = plugin.getDatabase().getConnection()) {
+                PreparedStatement statement = connection.prepareStatement("SELECT * FROM " + tableName + " WHERE uuid='" + uuid.toString() + "';");
+                ResultSet rs = statement.executeQuery();
+                if (rs == null || !rs.next())
+                    return null;
+                SPPlayer spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
+                SPRank rank = getPlugin().getRankManager().getRank(rs.getString("rank"));
+                if (rank == null)
+                    rank = getPlugin().getRankManager().getLowestRank();
+                spPlayer.setRank(rank);
+                spPlayer.setEloPoint(Integer.parseInt(rs.getString("elo")));
+                Arrays.stream(rs.getString("statistic").split(",")).forEach(s -> {
+                    String[] split = s.split(":");
+                    PlayerStatistic statistic = PlayerStatistic.valueOf(split[0]);
+                    spPlayer.setStatistic(statistic, Long.parseLong(split[2]));
+                });
+                String[] cooldownData = rs.getString("cooldown").split(",");
+                if (cooldownData.length == 3) {
+                    CooldownType cooldownType = CooldownType.valueOf(cooldownData[0]);
+                    Cooldown cooldown = null;
+                    switch (cooldownType) {
+                        case COMBAT_DEATH -> {
+                            cooldown = new DeathCooldownImpl(Long.parseLong(cooldownData[1]), Long.parseLong(cooldownData[2]));
+                        }
+                        case COMBAT_LOGOUT -> {
+                            cooldown = new LogoutCooldownImpl(Long.parseLong(cooldownData[1]), Long.parseLong(cooldownData[2]));
+                        }
                     }
-                    long combatTimestamp = Long.parseLong(map.getOrDefault("combat-since", "-1"));
-                    if (combatTimestamp != -1)
-                        this.combatTimestamp.put(uuid, combatTimestamp);
-
-                    long penaltyTime = Long.parseLong(map.getOrDefault("penalty.until", "-1"));
-                    if (penaltyTime != -1)
-                        this.combatPenalty.put(uuid, penaltyTime);
+                    spPlayer.setCooldown(cooldown);
                 }
+
+                Arrays.stream(rs.getString("kills_cooldown").split(",")).forEach(s -> {
+                    String[] split = s.split(":");
+                    ((SPPlayerImpl) spPlayer).addKillCooldown(UUID.fromString(split[0]), Long.parseLong(split[1]));
+                });
+                return spPlayer;
             } catch (SQLException e) {
                 e.printStackTrace();
+                return null;
             }
         } else
-            spPlayer = loadFromLocal(uuid);
-        return spPlayer;
+            return loadFromLocal(uuid);
     }
 
     private SPPlayer loadFromLocal(UUID uuid) {
@@ -243,28 +278,36 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             return null;
         FileConfiguration config = YamlConfiguration.loadConfiguration(file);
         SPPlayer spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
-        String rankId = config.getString("rank", "none");
+        String rankId = config.getString("rank", "");
         SPRank rank = plugin.getRankManager().getRank(rankId);
         if (rank == null)
             rank = plugin.getRankManager().getLowestRank();
         spPlayer.setRank(rank);
-        spPlayer.setEloPoint(Long.parseLong(config.getString("sp.current", "0")));
-        ((SPPlayerImpl) spPlayer).setPenaltyTimes(Integer.parseInt(config.getString("penalty.times", "0")));
-        ((SPPlayerImpl) spPlayer).setPenalty(Boolean.parseBoolean(config.getString("penalty.activate", "false")));
+        spPlayer.setEloPoint(Long.parseLong(config.getString("elo.current", "0")));
         boolean hasCooldown = config.getConfigurationSection("cooldown") != null;
         if (hasCooldown) {
+            CooldownType cooldownType = CooldownType.valueOf(config.getString("cooldown.type", ""));
             long startTime = Long.parseLong(config.getString("cooldown.start-time", "0"));
             long endTime = Long.parseLong(config.getString("cooldown.end-time", "0"));
-            this.combatCooldown.put(uuid, new CombatCooldownImpl(spPlayer, startTime, endTime));
+            Cooldown cooldown = null;
+            switch (cooldownType) {
+                case COMBAT_DEATH -> {
+                    cooldown = new DeathCooldownImpl(startTime, endTime);
+                }
+                case COMBAT_LOGOUT -> {
+                    cooldown = new LogoutCooldownImpl(startTime, endTime);
+                }
+            }
+            spPlayer.setCooldown(cooldown);
         }
-        long combatTimestamp = Long.parseLong(config.getString("combat-since", "-1"));
-        if (combatTimestamp != -1)
-            this.combatTimestamp.put(uuid, combatTimestamp);
-
-        long penaltyTime = Long.parseLong(config.getString("penalty.until", "-1"));
-        if (penaltyTime != -1)
-            this.combatPenalty.put(uuid, penaltyTime);
-
+        config.getConfigurationSection("statistic").getKeys(false).forEach(s -> {
+            PlayerStatistic statistic = PlayerStatistic.valueOf(s);
+            spPlayer.setStatistic(statistic, config.getLong("statistic." + s));
+        });
+        config.getConfigurationSection("kills_cooldown").getKeys(false).forEach(s -> {
+            String[] split = s.split(":");
+            ((SPPlayerImpl) spPlayer).addKillCooldown(UUID.fromString(split[0]), Long.parseLong(split[1]));
+        });
         return spPlayer;
     }
 
@@ -276,28 +319,37 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             return;
         SPPlayer spVictim = getPlayer(victim);
         SPPlayer spKiller = getPlayer(killer);
-
+        long killCooldown = spKiller.getKillCooldown(victim);
         EloProcessor eloProcessor = new EloProcessor().setWinner(spKiller).setLoser(spVictim);
-        long toAdd = eloProcessor.getNewLoserEP() - eloProcessor.getOldLoserEP();
+        long toAdd = eloProcessor.getNewWinnerEP() - eloProcessor.getOldWinnerEP();
         long toSubtract = eloProcessor.getOldLoserEP() - eloProcessor.getNewLoserEP();
-        spVictim.addEloPoint(toAdd);
-        spKiller.addEloPoint(toSubtract);
+
+        if (killCooldown != 0) {
+            if (killCooldown > TimeUtils.newInstance().getNewTime()) {
+                MessageUtils.sendMessage(killer, "&cBạn vừa giết người chơi này rồi");
+                toAdd = toSubtract = 0;
+            } else
+                spKiller.removeKillCooldown(victim);
+        }
+        spVictim.subtractEloPoint(toSubtract);
+        spKiller.addEloPoint(toAdd);
 
         spVictim.setStatistic(PlayerStatistic.DEATH_COUNT, spVictim.getStatistic(PlayerStatistic.DEATH_COUNT) + 1);
         spKiller.setStatistic(PlayerStatistic.KILL_COUNT, spVictim.getStatistic(PlayerStatistic.KILL_COUNT) + 1);
 
         applyReviveCooldown(victim);
-
-
+        spKiller.addKillCooldown(victim);
         int currentStreak = this.killStreaks.getOrDefault(killer.getUniqueId(), 0);
         this.killStreaks.put(killer.getUniqueId(), currentStreak + 1);
 //        String badget = getBadget(currentStreak);
 //        MessageUtils.sendTitle(killer, "&6&l⚔ " + badget + " ⚔", "&7Bạn đã hạ gục được &e" + (currentStreak + 1) + " &7người chơi");
-        long offsetKiller = spKiller.getEloPoint() - eloProcessor.getOldWinnerEP();
-        long offsetVictim = eloProcessor.getOldLoserEP() - spVictim.getEloPoint();
-        MessageUtils.sendMessage(killer, "&7[&a&l+&7] &b" + offsetKiller + " &7điểm");
-        MessageUtils.sendMessage(killer, "&7[&c&l-&7] &b" + offsetVictim + " &7điểm");
-        MessageUtils.broadcast("&b" + killer.getName() + "&7(&a+" + offsetKiller + "&7) ⚔ &b" + victim.getName() + " &7(&c-" + offsetVictim + "&7)");
+        MessageUtils.sendMessage(killer, "&7[&a&l+&7] &b" + toAdd + " &7điểm");
+        MessageUtils.sendMessage(victim, "&7[&c&l-&7] &b" + toSubtract + " &7điểm");
+        MessageUtils.broadcast(Lists.newArrayList(killer.getUniqueId(), victim.getUniqueId()), "&b" + killer.getName() + "&7(&a+" + toAdd
+                + "&7) ⚔ &b" + victim.getName() + " &7(&c-" + toSubtract + "&7)");
+
+        saveToDatabase(victim);
+        saveToDatabase(killer);
     }
 
     private String getBadget(int currentStreak) {
@@ -318,45 +370,57 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     }
 
     @EventHandler
+    public void onPlayerTeleport(PlayerTeleportEvent event) {
+        onPlayerMove(event);
+    }
+
+    @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
         if (event.getRespawnReason() != PlayerRespawnEvent.RespawnReason.DEATH)
             return;
-        CombatCooldown combatCooldown = this.combatCooldown.getOrDefault(player.getUniqueId(), null);
-        if (combatCooldown == null)
+        SPPlayer spPlayer = getPlayer(player);
+        DeathCooldown deathCooldown = spPlayer.getCooldown();
+        if (deathCooldown == null)
             return;
         if (lobbyId != null) {
             Location location = WGUtils.getSpawnLocation(lobbyId, player.getWorld());
-            event.setRespawnLocation(location);
+            if (location != null)
+                event.setRespawnLocation(location);
         }
         if (this.killStreaks.containsKey(player.getUniqueId())) {
             MessageUtils.sendTitle(player, "&f&l⚑", "&7Bạn đã bị mất chuỗi hạ gục");
             this.killStreaks.remove(player.getUniqueId());
-        } else
+        } else {
             MessageUtils.sendTitle(player, "&f&l⚑", "&7Bạn đã bị đánh bại");
-        MessageUtils.sendMessage(player, "&cBạn đã được đặt vào hàng chờ, có thể tham gia giao tranh lại trong &6"
-                + TimeUtils.of(combatCooldown.getStartTime(), combatCooldown.getEndTime()).getShortDuration());
+            MessageUtils.sendMessage(player, "&cBạn đã được đặt vào hàng chờ, có thể tham gia giao tranh lại trong &6"
+                    + TimeUtils.of(deathCooldown.getStartTime(), deathCooldown.getEndTime()).getShortDuration());
+        }
     }
 
     @EventHandler
     public void onEntityDamage(EntityDamageByEntityEvent event) {
-        if (this.combatTimestamp.containsKey(event.getEntity().getUniqueId())
-                && this.combatTimestamp.containsKey(event.getDamager().getUniqueId()))
-            return;
         if (event.getEntity() instanceof Player victim && event.getDamager() instanceof Player damager) {
+            SPPlayer spVictim = getPlayer(victim);
+            SPPlayer spDamager = getPlayer(damager);
             if (!WGUtils.isInPVPRegion(damager.getLocation()))
                 return;
-            this.combatTimestamp.putIfAbsent(victim.getUniqueId(), System.currentTimeMillis());
-            this.combatTimestamp.putIfAbsent(damager.getUniqueId(), System.currentTimeMillis());
-
-            MessageUtils.sendTitle(victim, "&a&l⚒",
-                    "&7Bạn nhận sát thương từ người chơi &6" + damager.getName());
-            MessageUtils.sendTitle(damager, "&a&l⚒",
-                    "&7Bạn gây sát thương lên người chơi &6" + victim.getName());
-            XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(victim, 1f, -1f);
-            XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(damager, 1f, -1f);
-
-            applyRestriction(damager);
+            if (spDamager.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) == 0L) {
+                spDamager.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, TimeUtils.newInstance().getNewTime());
+                MessageUtils.sendTitle(damager, "&a&l⚒",
+                        "&7Tiến vào giao tranh");
+                XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(damager, 1f, -1f);
+                applyRestriction(damager);
+                saveToDatabase(damager);
+            }
+            if (spVictim.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) == 0L) {
+                spVictim.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, TimeUtils.newInstance().getNewTime());
+                MessageUtils.sendTitle(damager, "&a&l⚒",
+                        "&7Tiến vào giao tranh");
+                XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(damager, 1f, -1f);
+                applyRestriction(damager);
+                saveToDatabase(victim);
+            }
         }
     }
 
@@ -367,25 +431,29 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         Location to = event.getTo();
         if (to == null)
             return;
-        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+        SPPlayer spPlayer = getPlayer(player);
+        if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) != 0) {
             if (WGUtils.isInPVPRegion(from) && !WGUtils.isInPVPRegion(to)) {
                 event.setCancelled(true);
                 MessageUtils.sendCooldownMessage(player, 10,
                         "&cBạn không được phép ra khỏi khu vực giao tranh trong khi đang giao tranh!");
             }
-        } else if (this.combatCooldown.containsKey(player.getUniqueId())
-                || this.combatPenalty.containsKey(player.getUniqueId())) {
+        } else if (spPlayer.getCooldown() != null) {
             if (!WGUtils.isInPVPRegion(from) && WGUtils.isInPVPRegion(to)) {
                 event.setCancelled(true);
-                boolean isCooldown = this.combatCooldown.containsKey(player.getUniqueId());
-                long endTime = isCooldown
-                        ? this.combatCooldown.get(player.getUniqueId()).getEndTime()
-                        : this.combatPenalty.get(player.getUniqueId());
-                TimeUtils tu = TimeUtils.newInstance().add(endTime);
-                String duration = tu.getShortDuration();
-                MessageUtils.sendCooldownMessage(player, 10, isCooldown
-                        ? "&cBạn phải chờ &6" + tu.getShortDuration() + " &cmới được tham gia đấu trường tiếp"
-                        : "&cBạn đã bị cấm tham gia giao tranh, hiệu lực còn &6" + duration);
+
+                for (CooldownType type : CooldownType.values()) {
+                    Cooldown cooldown = spPlayer.getCooldown();
+                    if (cooldown.getEndTime() < TimeUtils.newInstance().getNewTime()) {
+                        spPlayer.removeCooldown();
+                        continue;
+                    }
+                    TimeUtils tu = TimeUtils.of(cooldown.getStartTime()).add(cooldown.getEndTime());
+                    String duration = tu.getShortDuration();
+                    MessageUtils.sendCooldownMessage(player, 10, type == CooldownType.COMBAT_DEATH
+                            ? "&cBạn phải chờ &6" + tu.getShortDuration() + " &cmới được tham gia đấu trường tiếp"
+                            : "&cBạn đã bị cấm tham gia giao tranh, hiệu lực còn &6" + duration);
+                }
             }
         }
     }
@@ -393,14 +461,17 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        SPPlayer spPlayer = getPlayer(player);
-        if (spPlayer == null)
+        if (getPlayer(player) == null)
             this.players.computeIfAbsent(player.getUniqueId(), uuid -> {
                 SPPlayer spPlayer1 = new SPPlayerImpl(player);
                 spPlayer1.setRank(plugin.getRankManager().getLowestRank());
+                saveToDatabase(player);
                 return spPlayer1;
             });
-        if (this.combatPenalty.containsKey(player.getUniqueId())) {
+        SPPlayer spPlayer = getPlayer(player);
+
+        LogoutCooldown logoutCooldown = spPlayer.getCooldown();
+        if (logoutCooldown != null) {
             MessageUtils.sendTitle(player,
                     "&c&lBẠN BỊ PHẠT!",
                     "&7Vì đã thoát trong lúc giao tranh.");
@@ -414,19 +485,20 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         SPPlayer spPlayer = getPlayer(player);
         if (spPlayer == null)
             return;
-        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
-            ((SPPlayerImpl) spPlayer).enterCombatLogout();
-            this.combatTimestamp.remove(player.getUniqueId());
-
-            long combatLogoutTimes = spPlayer.getPenaltyTimes();
+        if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) != 0) {
+            if (spPlayer.getCooldown() != null && spPlayer.getCooldown().getType() == CooldownType.COMBAT_LOGOUT)
+                return;
+            spPlayer.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, 0);
+            long combatLogoutTimes = spPlayer.getStatistic(PlayerStatistic.COMBAT_LOGOUT_TIMES);
             TimeUtils tu = TimeUtils.newInstance();
-            if (combatLogoutTimes == 1)
+            if (combatLogoutTimes == 0)
                 tu.add(TimeUnits.HOUR, 1);
-            else if (combatLogoutTimes == 2)
+            else if (combatLogoutTimes == 1)
                 tu.add(TimeUnits.HOUR, 12);
-            else if (combatLogoutTimes >= 3)
+            else if (combatLogoutTimes >= 2)
                 tu.add(TimeUnits.DAY, 1);
-            this.combatPenalty.put(player.getUniqueId(), tu.getNewTime());
+            spPlayer.setCooldown(new LogoutCooldownImpl(tu.getNewTime()));
+            spPlayer.setStatistic(PlayerStatistic.COMBAT_LOGOUT_TIMES, combatLogoutTimes + 1);
         }
         saveToDatabase(player);
     }
@@ -434,7 +506,10 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @EventHandler
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
-        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+        SPPlayer spPlayer = getPlayer(player);
+        if (spPlayer == null)
+            return;
+        if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) != 0) {
             event.setCancelled(true);
             MessageUtils.sendTitle(player, "&c&l✖", "&7Không thể xài lệnh khi đang giao tranh");
         }
@@ -443,14 +518,20 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @EventHandler
     public void onToggleFlying(PlayerToggleFlightEvent event) {
         Player player = event.getPlayer();
-        if (this.combatTimestamp.containsKey(player.getUniqueId()))
+        SPPlayer spPlayer = getPlayer(player);
+        if (spPlayer == null)
+            return;
+        if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) != 0)
             event.setCancelled(true);
     }
 
     @EventHandler
     public void onPlayerGamemode(PlayerGameModeChangeEvent event) {
         Player player = event.getPlayer();
-        if (this.combatTimestamp.containsKey(player.getUniqueId())) {
+        SPPlayer spPlayer = getPlayer(player);
+        if (spPlayer == null)
+            return;
+        if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) != 0) {
             event.setCancelled(true);
             if (player.getGameMode() != GameMode.ADVENTURE)
                 player.setGameMode(GameMode.ADVENTURE);
@@ -460,21 +541,25 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @EventHandler
     public void onPlayerPotion(EntityPotionEffectEvent event) {
         if (event.getEntity() instanceof Player player) {
-            if (!this.combatTimestamp.containsKey(player.getUniqueId()))
+            SPPlayer spPlayer = getPlayer(player);
+            if (spPlayer == null)
                 return;
-            if (event.getModifiedType() != PotionEffectType.INVISIBILITY)
-                return;
-            if (event.getAction() == EntityPotionEffectEvent.Action.ADDED
-                    || event.getAction() == EntityPotionEffectEvent.Action.CHANGED)
-                event.setCancelled(true);
+            if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) != 0) {
+                if (event.getModifiedType() != PotionEffectType.INVISIBILITY)
+                    return;
+                if (event.getAction() == EntityPotionEffectEvent.Action.ADDED
+                        || event.getAction() == EntityPotionEffectEvent.Action.CHANGED)
+                    event.setCancelled(true);
+            }
         }
     }
 
     private void applyReviveCooldown(Player player) {
-        long firstCombatTime = this.combatTimestamp.getOrDefault(player.getUniqueId(), -1L);
-        if (firstCombatTime == -1)
+        SPPlayer spPlayer = getPlayer(player);
+        long combatTimestamp = spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP);
+        if (combatTimestamp == 0)
             return;
-        int minutes = (int) ((System.currentTimeMillis() - firstCombatTime) / 60000);
+        int minutes = (int) ((System.currentTimeMillis() - combatTimestamp) / 60000);
         int reviveSeconds = 0;
         if (minutes <= 6)
             reviveSeconds = minutes * 2 + 4;
@@ -483,8 +568,8 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         else if (minutes > 8)
             reviveSeconds = minutes * 2 + 6;
         TimeUtils tu = TimeUtils.newInstance().add(TimeUnits.SECOND, reviveSeconds);
-        this.combatCooldown.putIfAbsent(player.getUniqueId(), new CombatCooldownImpl(getPlayer(player), tu.getNewTime()));
-        this.combatTimestamp.remove(player.getUniqueId());
+        spPlayer.setCooldown(new DeathCooldownImpl(tu.getNewTime()));
+        spPlayer.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, 0L);
     }
 
     private void applyRestriction(Player player) {
@@ -496,4 +581,5 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     public SPPlugin getPlugin() {
         return plugin;
     }
+
 }

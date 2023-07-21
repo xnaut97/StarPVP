@@ -8,7 +8,6 @@ import com.google.common.collect.Maps;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -29,9 +28,14 @@ public class RankManagerImpl implements RankManager {
         if(section == null)
             return;
         section.getKeys(false).forEach(id -> {
-            long sp = config.getLong("ranks." + id + ".sp");
+            long elo = config.getLong("ranks." + id + ".elo");
             String name = config.getString("ranks." + id + ".name");
-            this.ranks.putIfAbsent(id, new SPRankImpl(this, id, sp, name));
+            boolean duplicate = ranks.values().stream().anyMatch(r -> r.getElo() == elo);
+            if(duplicate) {
+                getPlugin().getLogger().severe("Error while loading rank '" + name + "' due to duplicated elo point with other rank!");
+                return;
+            }
+            this.ranks.putIfAbsent(id, new SPRankImpl(this, id, elo, name));
         });
     }
 
@@ -51,12 +55,12 @@ public class RankManagerImpl implements RankManager {
 
     @Override
     public SPRank getLowestRank() {
-        return this.ranks.values().stream().min(Comparator.comparing(SPRank::getSP, Comparator.naturalOrder())).orElse(null);
+        return this.ranks.values().stream().min((o1, o2) -> (int) (o1.getElo() - o2.getElo())).orElse(null);
     }
 
     @Override
     public SPRank getHighestRank() {
-        return this.ranks.values().stream().max(Comparator.comparing(SPRank::getSP, Comparator.naturalOrder())).orElse(null);
+        return this.ranks.values().stream().max((o1, o2) -> (int) (o2.getElo() - o1.getElo())).orElse(null);
     }
 
 }

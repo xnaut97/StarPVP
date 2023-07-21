@@ -24,6 +24,8 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
 
     private YamlDocument document;
 
+    private YamlDocument message;
+
     private PlayerManager playerManager;
 
     private MySQL database;
@@ -76,6 +78,14 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
                     DumperSettings.DEFAULT,
                     UpdaterSettings.builder().setVersioning(new BasicVersioning("config-version"))
                             .build());
+            this.message = YamlDocument.create(new File(getDataFolder(), "messages.yml"),
+                    Objects.requireNonNull(getResource("messages.yml")),
+                    GeneralSettings.DEFAULT,
+                    LoaderSettings.builder().setAutoUpdate(true).build(),
+                    DumperSettings.DEFAULT,
+                    UpdaterSettings.builder().setVersioning(new BasicVersioning("message-version"))
+                            .build());
+
         }catch (Exception e) {
             e.printStackTrace();
         }
@@ -83,23 +93,31 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
 
     private void setupDatabase() {
         boolean toggle = getConfig().getBoolean("database.toggle", true);
-        if (!toggle)
+        if(!toggle)
             return;
-        String username = getDocument().getString("database.username", "root");
-        String password = getDocument().getString("database.password", "");
-        String name = getDocument().getString("database.name", "authenticator");
-        String host = getDocument().getString("database.host", "localhost");
-        String port = getDocument().getString("database.port", "3306");
-        String tableName = getDocument().getString("database.table-name", "user");
-        this.database = new MySQL(this, username, password, name, host, port);
-        if (!this.database.isConnected()) {
+        String username = getConfig().getString("database.username", "root");
+        String password = getConfig().getString("database.password", "password");
+        String name = getConfig().getString("database.name", "authenticator");
+        String host = getConfig().getString("database.host", "localhost");
+        String port = getConfig().getString("database.port", "3306");
+        String tableName = getConfig().getString("database.table-name", "user");
+        int poolSize = getConfig().getInt("database.pool.max-pool-size", 10);
+        int timeout = getConfig().getInt("database.pool.timeout", 5000);
+        int idleTimeout = getConfig().getInt("database.pool.idle-timeout", 600000);
+        int lifeTime = getConfig().getInt("database.pool.max-life-time", 1800000);
+        this.database = new MySQL(this, username, password, name, host, port, poolSize, timeout, idleTimeout, lifeTime);
+        if(!this.database.isConnected()) {
             getLogger().info("Use local cache instead.");
             return;
         }
         boolean createResult = this.database.createTable(tableName,
                 new DatabaseElement("uuid", DatabaseElement.Type.VAR_CHAR),
                 new DatabaseElement("player_name", DatabaseElement.Type.VAR_CHAR),
-                new DatabaseElement("data", DatabaseElement.Type.LONG_TEXT));
+                new DatabaseElement("rank", DatabaseElement.Type.VAR_CHAR),
+                new DatabaseElement("elo", DatabaseElement.Type.VAR_CHAR),
+                new DatabaseElement("statistic", DatabaseElement.Type.LONG_TEXT),
+                new DatabaseElement("cooldown", DatabaseElement.Type.VAR_CHAR),
+                new DatabaseElement("kills_cooldown", DatabaseElement.Type.LONG_TEXT));
         if (createResult)
             getLogger().info("Created table '" + tableName + "' success!");
     }

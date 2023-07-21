@@ -1,0 +1,6 @@
+message-version: 1
+
+command:
+  add: '&6@player-name@: &c@old-elo@ &7» &a@new-elo@'
+  remove: '&6@player-name@: &a@old-elo@ &7» &c@new-elo@'
+  reset: '&6Đã đặt lại số điểm elo về 0 cho người chơi &b@player-name@'

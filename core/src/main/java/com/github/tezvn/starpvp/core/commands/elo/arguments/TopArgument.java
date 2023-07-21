@@ -1,4 +1,4 @@
-package com.github.tezvn.starpvp.core.commands.arguments;
+package com.github.tezvn.starpvp.core.commands.elo.arguments;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.core.gui.TopRanking;
@@ -9,7 +9,7 @@ import org.bukkit.entity.Player;
 
 import java.util.List;
 
-public class TopArgument extends AbstractArgument{
+public class TopArgument extends EloArgument {
 
     public TopArgument(SPPlugin plugin) {
         super(plugin);

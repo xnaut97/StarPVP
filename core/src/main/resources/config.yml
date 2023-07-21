@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 4
 
 database:
   toggle: true
@@ -6,63 +6,81 @@ database:
   table-name: 'user'
   username: 'root'
   password: ''
-  name: 'starpvp'
+  name: 'skyblocksign'
   host: 'localhost'
   port: 'default'
+  # Connection pool config
+  pool:
+    # Số lượng kết nối tối đa trong pool (Mặc định: 10)
+    max-pool-size: 10
+    # Các chỉ số dưới đây sử dụng đơn vị ms! 1s = 1000ms
+    # Thời gian chờ tối đa để lấy kết nối từ pool (5 giây)
+    timeout: 5000
+    # Thời gian tối đa mà một kết nối có thể ở trạng thái chờ (10 phút)
+    idle-timeout: 600000
+    # Thời gian tối đa mà một kết nối có thể sống (30 phút)
+    max-life-time: 1800000
 
-hell-sp:
+hell-elo:
   # Percent to activate Hell SP when death count is accounted
   # for more than X% of the total combat times.
   activate: '60%'
   multiplier:
     # SP will be decreased by X% when victory
-    # New SP = {total-sp} + {sp-gained} - ({sp-gained} * {multiplier}%)
+    # New SP = {total-elo} + {elo-gained} - ({elo-gained} * {multiplier}%)
     # Example: 1603 + 16 - (16 * 0.4) = 1603 + 16 - 6.4 = 1612.6 = 1612 (rounded)
     kill: '30%'
     # SP will be increased by X% when defeat
-    # SP = {total-sp} - {sp-lost} - ({sp-lost} * {multiplier}%)
+    # SP = {total-elo} - {elo-lost} - ({elo-lost} * {multiplier}%)
     # Example: 1603 - 16 - (16 * 0.4) = 1603 - 16 - 6.4 = 1580.6 = 1580 (rounded)
     death: '40%'
 
 # In High SP, player will get more gained SP when he killed someone
-high-sp:
+high-elo:
   # Percent to get High SP: when kill count is accounted
   # for more than X% of the total combat times.
   activate: '35%'
   # Chance to get addition SP when player is at High SP
   chance: '30%'
-  # SP = {total-sp} + {sp-gained} + {sp-gained}*{multiplier}
+  # SP = {total-elo} + {elo-gained} + {elo-gained}*{multiplier}
   multiplier: '25%'
 
-# Set lobby for respawning player
+# Set lobby for reeloawning player
 # Defined by WorldGuard region id.
 lobby: ''
 
+cooldown:
+  kill-other: '5m'
+  death: '1m'
+  logout: '5m'
+  # Nếu người chơi không gây/bị sát thương thì sẽ thoát giao tranh
+  exit-combat: '30s'
+
 ranks:
   coal:
-    sp: 1000
+    elo: 1000
     name: '&8&lTập Sự'
   copper:
-    sp: 1200
+    elo: 1200
     name: '&3&lĐồng'
   iron:
-    sp: 1600
+    elo: 1600
     name: '&7&lSắt'
   gold:
-    sp: 1800
+    elo: 1800
     name: '&e&lVàng'
   diamond:
-    sp: 2000
+    elo: 2000
     name: '&b&lKim Cương'
   emerald:
-    sp: 2200
+    elo: 2200
     name: '&a&lLục Bảo'
   netherite:
-    sp: 2400
+    elo: 2400
     name: '&2&lCao Thủ'
-  starise:
-    sp: 2500
+  beacon:
+    elo: 2500
     name: '&c&lĐại Cao Thủ'
-  challenger:
-    sp: 2800
+  starise:
+    elo: 2800
     name: '&6&lThách Đấu'
