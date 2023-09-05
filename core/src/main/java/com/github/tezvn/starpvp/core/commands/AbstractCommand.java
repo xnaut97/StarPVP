@@ -223,6 +223,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                 });
                 return command.getUniqueId().equals(this.getUniqueId());
             });
+            this.subCommands.clear();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -535,7 +536,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                 handleCommands(sender, 0);
                 return;
             }
-            int page = getPage(args[1]);
+            int page = getPage(args[0]);
             handleCommands(sender, page);
         }
 

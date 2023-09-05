@@ -14,4 +14,6 @@ public interface RankManager {
 
     SPRank getHighestRank();
 
+    void reload();
+
 }

@@ -1,8 +1,7 @@
-package com.github.tezvn.starpvp.core.commands.elo;
+package com.github.tezvn.starpvp.core.commands.elo.arguments;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
-import com.github.tezvn.starpvp.api.rank.CompareResult;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.github.tezvn.starpvp.core.commands.elo.arguments.EloArgument;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
@@ -47,17 +46,17 @@ public class SetArgument extends EloArgument {
     }
 
     private void execute(CommandSender sender, String[] args) {
-        if(args.length == 0) {
+        if (args.length == 0) {
             MessageUtils.sendMessage(sender, "&cVui lòng nhập tên người chơi!");
             return;
         }
         String name = args[0];
         SPPlayer spPlayer = getPlayerManager().getPlayer(name);
-        if(spPlayer == null) {
+        if (spPlayer == null) {
             MessageUtils.sendMessage(sender, "&cKhông thể tìm thấy người chơi &6" + name);
             return;
         }
-        if(args.length == 1) {
+        if (args.length == 1) {
             MessageUtils.sendMessage(sender, "&cVui lòng nhập số điểm elo");
             return;
         }
@@ -66,20 +65,20 @@ public class SetArgument extends EloArgument {
         SPRank oldRank = spPlayer.getRank();
         spPlayer.setEloPoint(elo);
         MessageUtils.sendMessage(sender, "&6" + spPlayer.getPlayerName() + ": &c" + oldElo + " &7» &a" + spPlayer.getEloPoint());
-        CompareResult compareResult = oldRank.compare(spPlayer.getRank());
-        if(compareResult != CompareResult.EQUAL)
-            MessageUtils.sendMessage(sender, "&6Cấp bậc của " + spPlayer.getPlayerName() + ": &b" + spPlayer.getRank().getDisplayName()
-            + (compareResult == CompareResult.HIGHER ? "&a▲" : "&c▼"));
+        boolean promoted = oldRank.getElo() < spPlayer.getRank().getElo();
+        MessageUtils.sendMessage(sender, "&6Cấp bậc của " + spPlayer.getPlayerName() + ": &b" + spPlayer.getRank().getDisplayName()
+                + (promoted ? "&a▲" : "&c▼"));
+        getPlayerManager().saveToDatabase(spPlayer.asOfflinePlayer());
     }
 
     @Override
     public List<String> tabComplete(CommandSender sender, String[] args) {
-        if(args.length == 1)
+        if (args.length == 1)
             return getPlayerManager().getPlayers().stream()
                     .map(SPPlayer::getPlayerName)
                     .filter(name -> name.startsWith(args[0]))
                     .collect(Collectors.toList());
-        if(args.length == 2)
+        if (args.length == 2)
             return Collections.singletonList("amount");
         return null;
     }

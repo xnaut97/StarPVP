@@ -6,18 +6,26 @@ import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.github.tezvn.starpvp.core.commands.CommandManager;
+import com.github.tezvn.starpvp.core.log.BaseLog;
+import com.github.tezvn.starpvp.core.log.LogType;
+import com.github.tezvn.starpvp.core.log.PlayerLog;
+import com.github.tezvn.starpvp.core.log.TeamLog;
 import com.github.tezvn.starpvp.core.player.PlayerManagerImpl;
 import com.github.tezvn.starpvp.core.rank.RankManagerImpl;
 import com.github.tezvn.starpvp.core.utils.BaseMenu;
+import com.google.common.collect.Maps;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.dvs.versioning.BasicVersioning;
 import dev.dejvokep.boostedyaml.settings.dumper.DumperSettings;
 import dev.dejvokep.boostedyaml.settings.general.GeneralSettings;
 import dev.dejvokep.boostedyaml.settings.loader.LoaderSettings;
 import dev.dejvokep.boostedyaml.settings.updater.UpdaterSettings;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
+import java.io.*;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.Objects;
 
 public class SPPluginImpl extends JavaPlugin implements SPPlugin {
@@ -33,21 +41,28 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
 
     private RankManager rankManager;
 
+    private final Map<LogType, BaseLog> logs = Maps.newHashMap();
+
+    private PluginExpansion expansion;
+
     @Override
     public void onEnable() {
         BaseMenu.register(this);
         setupConfig();
         setupDatabase();
+        registerLog();
         this.rankManager = new RankManagerImpl(this);
         this.playerManager = new PlayerManagerImpl(this);
         this.commandManager = new CommandManager(this);
+        registerExpansion();
     }
 
     @Override
     public void onDisable() {
         BaseMenu.forceCloseAll();
-        if(this.commandManager != null)
-            this.commandManager.unregister();
+        if(this.expansion != null) this.expansion.unregister();
+        if (this.document != null) this.document = null;
+        if (this.commandManager != null) this.commandManager.unregister();
     }
 
     @Override
@@ -69,6 +84,23 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         return database;
     }
 
+    @Override
+    public void reload() {
+        if(this.rankManager != null) this.rankManager.reload();
+        if(this.document != null) {
+            try {
+                this.document.reload();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends BaseLog> T getLog(LogType type) {
+        return (T) this.logs.get(type);
+    }
+
     private void setupConfig() {
         try {
             this.document = YamlDocument.create(new File(getDataFolder(), "config.yml"),
@@ -78,22 +110,37 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
                     DumperSettings.DEFAULT,
                     UpdaterSettings.builder().setVersioning(new BasicVersioning("config-version"))
                             .build());
-            this.message = YamlDocument.create(new File(getDataFolder(), "messages.yml"),
-                    Objects.requireNonNull(getResource("messages.yml")),
-                    GeneralSettings.DEFAULT,
-                    LoaderSettings.builder().setAutoUpdate(true).build(),
-                    DumperSettings.DEFAULT,
-                    UpdaterSettings.builder().setVersioning(new BasicVersioning("message-version"))
-                            .build());
-
-        }catch (Exception e) {
+//            this.message = YamlDocument.create(new File(getDataFolder(), "messages.yml"),
+//                    Objects.requireNonNull(getResource("messages.yml")),
+//                    GeneralSettings.DEFAULT,
+//                    LoaderSettings.builder().setAutoUpdate(true).build(),
+//                    DumperSettings.DEFAULT,
+//                    UpdaterSettings.builder().setVersioning(new BasicVersioning("message-version"))
+//                            .build());
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    private void registerExpansion() {
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null)
+            this.expansion = new PluginExpansion(this);
+    }
+
+    private void registerLog() {
+        Arrays.stream(LogType.values()).forEach(type -> {
+            BaseLog log = null;
+            switch (type) {
+                case PLAYER -> log = new PlayerLog(this);
+                case TEAM -> log = new TeamLog(this);
+            }
+            this.logs.put(type, log);
+        });
+    }
+
     private void setupDatabase() {
         boolean toggle = getConfig().getBoolean("database.toggle", true);
-        if(!toggle)
+        if (!toggle)
             return;
         String username = getConfig().getString("database.username", "root");
         String password = getConfig().getString("database.password", "password");
@@ -106,7 +153,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         int idleTimeout = getConfig().getInt("database.pool.idle-timeout", 600000);
         int lifeTime = getConfig().getInt("database.pool.max-life-time", 1800000);
         this.database = new MySQL(this, username, password, name, host, port, poolSize, timeout, idleTimeout, lifeTime);
-        if(!this.database.isConnected()) {
+        if (!this.database.isConnected()) {
             getLogger().info("Use local cache instead.");
             return;
         }
@@ -121,4 +168,5 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         if (createResult)
             getLogger().info("Created table '" + tableName + "' success!");
     }
+
 }

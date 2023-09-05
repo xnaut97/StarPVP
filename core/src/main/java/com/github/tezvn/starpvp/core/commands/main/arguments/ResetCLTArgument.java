@@ -1,7 +1,7 @@
-package com.github.tezvn.starpvp.core.commands.elo.arguments;
+package com.github.tezvn.starpvp.core.commands.main.arguments;
 
-import com.cryptomorin.xseries.XSound;
 import com.github.tezvn.starpvp.api.SPPlugin;
+import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
 import org.bukkit.command.CommandSender;
@@ -9,26 +9,26 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-public class ResetArgument extends EloArgument {
-    public ResetArgument(SPPlugin plugin) {
+public class ResetCLTArgument extends StarPVPArgument {
+
+    public ResetCLTArgument(SPPlugin plugin) {
         super(plugin);
     }
 
     @Override
     public String getName() {
-        return "reset";
+        return "resetclt";
     }
 
     @Override
     public String getDescription() {
-        return "Reset player's elo point";
+        return "Reset combat logged times";
     }
 
     @Override
     public String getUsage() {
-        return "elo reset [player]";
+        return "starpvp resetclt [player/@all]";
     }
 
     @Override
@@ -42,32 +42,32 @@ public class ResetArgument extends EloArgument {
     }
 
     private void execute(CommandSender sender, String[] args) {
-        if(args.length == 0) {
+        if (args.length == 0) {
             MessageUtils.sendMessage(sender, "&cVui lòng nhập tên người chơi!");
             return;
         }
         String name = args[0];
+        if(name.equalsIgnoreCase("@all")) {
+            getPlayerManager().getPlayers().forEach(this::reset);
+            MessageUtils.sendMessage(sender, "&aReset số lần thoát giao tranh của tất cả người chơi");
+            return;
+        }
         SPPlayer spPlayer = getPlayerManager().getPlayer(name);
-        if(spPlayer == null) {
+        if (spPlayer == null) {
             MessageUtils.sendMessage(sender, "&cKhông thể tìm thấy người chơi &6" + name);
             return;
         }
-        spPlayer.setEloPoint(1000);
-        MessageUtils.sendMessage(sender, "&6Đã đặt lại số điểm về 0 cho người chơi &b" + spPlayer.getPlayerName());
-        if(spPlayer.asPlayer() != null) {
-            MessageUtils.sendMessage(spPlayer.asPlayer(), "&6Điểm elo của bạn đã bị reset!");
-            XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(spPlayer.asPlayer());
-        }
+        reset(spPlayer);
+        MessageUtils.sendMessage(sender, "&aReset số lần thoát giao tranh của người chơi &6" + name);
+    }
+
+    private void reset(SPPlayer spPlayer) {
+        spPlayer.setStatistic(PlayerStatistic.COMBAT_LOGOUT_TIMES, 0L);
         getPlayerManager().saveToDatabase(spPlayer.asOfflinePlayer());
     }
 
     @Override
     public List<String> tabComplete(CommandSender sender, String[] args) {
-        if(args.length == 1)
-            return getPlayerManager().getPlayers().stream()
-                    .map(SPPlayer::getPlayerName)
-                    .filter(name -> name.startsWith(args[0]))
-                    .collect(Collectors.toList());
         return null;
     }
 }

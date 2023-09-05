@@ -1,37 +1,33 @@
-package com.github.tezvn.starpvp.core.commands.rank.arguments;
+package com.github.tezvn.starpvp.core.commands.main.arguments;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
+import com.github.tezvn.starpvp.core.commands.AbstractArgument;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.permissions.PermissionDefault;
 
 import java.util.List;
 
-public class ListArgument extends RankArgument {
-    public ListArgument(SPPlugin plugin) {
+public class ReloadArgument extends StarPVPArgument {
+
+    public ReloadArgument(SPPlugin plugin) {
         super(plugin);
     }
 
     @Override
     public String getName() {
-        return "list";
+        return "reload";
     }
 
     @Override
     public String getDescription() {
-        return "Views all rank";
+        return "Reload plugins";
     }
 
     @Override
     public String getUsage() {
-        return "rank list";
-    }
-
-    @Override
-    public PermissionDefault getPermissionDefault() {
-        return PermissionDefault.TRUE;
+        return "starpvp reload";
     }
 
     @Override
@@ -45,11 +41,8 @@ public class ListArgument extends RankArgument {
     }
 
     private void execute(CommandSender sender) {
-        MessageUtils.sendMessage(sender, "&6Danh sách cấp bậc:");
-        getRankManager().getRanks().stream()
-                .sorted((r1, r2) -> (int) (r1.getElo() - r2.getElo()))
-                .map(rank -> "&f• " + rank.getDisplayName() + (sender instanceof Player ? "&7« &aBạn đang ở bậc này" : ""))
-                .forEachOrdered(r -> MessageUtils.sendMessage(sender, r));
+        getPlugin().reload();
+        MessageUtils.sendMessage(sender, "&aReloaded plugin!");
     }
 
     @Override

@@ -12,6 +12,7 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class EloCommand extends AbstractCommand<SPPlugin> {
     public EloCommand(SPPlugin plugin) {
@@ -19,11 +20,11 @@ public class EloCommand extends AbstractCommand<SPPlugin> {
         registerArguments(new ClassFinder(plugin).setPackage(EloArgument.class).removeClass(EloArgument.class).find().stream().map(c -> {
             try {
                 return c.getConstructor(SPPlugin.class).newInstance(plugin);
-            }catch (Exception e) {
+            } catch (Exception e) {
                 plugin.getLogger().severe("Error while registering argument '" + c.getSimpleName() + "' for command '" + getName() + "'");
                 return null;
             }
-        }).filter(Objects::nonNull).toList().toArray(new CommandArgument[0]));
+        }).filter(Objects::nonNull).distinct().toArray(CommandArgument[]::new));
     }
 
     @Override
@@ -37,7 +38,7 @@ public class EloCommand extends AbstractCommand<SPPlugin> {
             return;
         }
         MessageUtils.sendMessage(player,
-                "&f- Điểm: &6" + spPlayer.getTotalEloPoint(),
+                "&f- Điểm: &6" + spPlayer.getEloPoint(),
                 "&f- Cấp bậc: &b" + spPlayer.getRank().getDisplayName());
     }
 

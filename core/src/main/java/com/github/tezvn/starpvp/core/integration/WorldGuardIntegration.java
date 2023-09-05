@@ -1,9 +1,7 @@
-package com.github.tezvn.starpvp.core.utils;
+package com.github.tezvn.starpvp.core.integration;
 
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
 import com.sk89q.worldguard.protection.flags.Flags;
 import com.sk89q.worldguard.protection.flags.StateFlag;
@@ -15,10 +13,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 
-import java.util.List;
-import java.util.Objects;
-
-public class WGUtils {
+public class WorldGuardIntegration {
 
     public static ProtectedRegion getRegion(Location location) {
         if(!hasWorldGuard())

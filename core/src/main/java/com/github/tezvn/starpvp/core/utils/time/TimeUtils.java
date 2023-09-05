@@ -250,7 +250,7 @@ public class TimeUtils {
             return null;
         }
     }
-
+    
     public static long toTimeMillis(String format) {
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern(DEFAULT_DATE_FORMAT);
         return ZonedDateTime.parse(format, dtf).toInstant().toEpochMilli();

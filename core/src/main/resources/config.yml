@@ -1,4 +1,4 @@
-config-version: 4
+config-version: 12
 
 database:
   toggle: true
@@ -45,9 +45,49 @@ high-elo:
   # SP = {total-elo} + {elo-gained} + {elo-gained}*{multiplier}
   multiplier: '25%'
 
-# Set lobby for reeloawning player
 # Defined by WorldGuard region id.
-lobby: ''
+region:
+  # Set lobby for respawning player
+  lobby: ''
+  # Set pvp region for player combat
+  pvp: ''
+
+# Hình phạt khi người chơi phạm phải
+penalty:
+  # Nếu người chơi đạt elo thấp vượt ngưỡng thì sẽ kích hoạt danh sách lệnh
+  # Bỏ lệnh khỏi cần dấu / phía trước
+  low-elo:
+    # Ngưỡng elo kích hoạt
+    '300':
+      # Lệnh chạy khi kích hoạt
+      # Placeholder:
+      # - @player-name@ : tên người chơi
+      commands:
+        - 'thor @player-name@'
+        #- command jail
+        #- command abc
+    '400':
+      commands:
+        - 'kill @player-name@'
+        #- command abc
+  # Trừng phạt người chơi khi thoát tnong giao tranh
+  combat-logged:
+#    Giết người chơi khi họ thoát game
+    kill-on-logout: true
+#   Nếu không có số lần nào được liệt kê hoặc người chơi
+#   vượt quá số lần được liệt kê thì default sẽ được áp dụng
+    default:
+      - 'elo remove @player-name@ 10'
+#   Khi người chơi chết lần 1
+#   1:
+#     - 'command abc'
+#   Khi người chơi chết lần 2
+#   2:
+#     - 'command abc'
+#   Khi người chơi chết trong khoảng [min-max]
+#   Lưu ý số lần min-max không được trùng với các lần khác, nếu không sẽ không được load lên
+#   5-10:
+#     - 'command abc'
 
 cooldown:
   kill-other: '5m'
@@ -56,6 +96,24 @@ cooldown:
   # Nếu người chơi không gây/bị sát thương thì sẽ thoát giao tranh
   exit-combat: '30s'
 
+log:
+  # Bật chế độ log
+  toggle: true
+  # Dung lượng tối đa cho 1 file log, nếu đạt giới hạn sẽ tạo file mới
+  max-file-size: 1 #megabytes
+
+#Cấp bậc trong máy chủ
+#ranks:
+#  coal: - rank id
+#    elo: - điểm elo bắt đầu
+#    name: - tên hiển thị
+#    Khi cơ chế giáng hạng đã kích hoạt sẽ tiến hành trừ điểm và lặp lại sau số ngày đã config
+#    Nếu không thêm thì sẽ không bị trừ điểm
+#    penalty:
+#      active-days: - Số ngày không hoạt động để kích hoạt trừ điểm
+#      elo-lost:
+#         period: - Số ngày định kì để trừ điểm elo, ví dụ set 5 ngày thì cứ 5 ngày sẽ trừ điểm 1 lần
+#         amount: - Số điểm bị trừ
 ranks:
   coal:
     elo: 1000
@@ -72,15 +130,42 @@ ranks:
   diamond:
     elo: 2000
     name: '&b&lKim Cương'
+    penalty:
+      active-days: 28
+      elo-lost:
+        period: 7
+        amount: 35
   emerald:
     elo: 2200
     name: '&a&lLục Bảo'
+    penalty:
+      active-days: 28
+      elo-lost:
+        period: 7
+        amount: 50
   netherite:
     elo: 2400
     name: '&2&lCao Thủ'
+    penalty:
+      active-days: 14
+      elo-lost:
+        period: 5
+        amount: 75
   beacon:
     elo: 2500
     name: '&c&lĐại Cao Thủ'
+    penalty:
+      active-days: 10
+      elo-lost:
+        period: 3
+        amount: 100
   starise:
     elo: 2800
     name: '&6&lThách Đấu'
+    penalty:
+      active-days: 7
+      elo-lost:
+        period: 1
+        amount: 100
+
+

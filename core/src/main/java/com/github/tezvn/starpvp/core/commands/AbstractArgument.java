@@ -3,9 +3,7 @@ package com.github.tezvn.starpvp.core.commands;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.rank.RankManager;
-import com.github.tezvn.starpvp.core.commands.AbstractCommand;
 import com.google.common.collect.Lists;
-import org.bukkit.command.CommandSender;
 import org.bukkit.permissions.PermissionDefault;
 
 import java.util.List;

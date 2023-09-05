@@ -2,6 +2,7 @@ package com.github.tezvn.starpvp.core.rank;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.rank.RankManager;
+import com.github.tezvn.starpvp.api.rank.RankPenalty;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -22,7 +23,9 @@ public class RankManagerImpl implements RankManager {
         reload();
     }
 
-    private void reload() {
+    @Override
+    public void reload() {
+        this.ranks.clear();
         FileConfiguration config = plugin.getConfig();
         ConfigurationSection section = config.getConfigurationSection("ranks");
         if(section == null)
@@ -35,7 +38,15 @@ public class RankManagerImpl implements RankManager {
                 getPlugin().getLogger().severe("Error while loading rank '" + name + "' due to duplicated elo point with other rank!");
                 return;
             }
-            this.ranks.putIfAbsent(id, new SPRankImpl(this, id, elo, name));
+            PenaltyData penaltyData = null;
+            ConfigurationSection penaltySection = config.getConfigurationSection("penalty");
+            if(penaltySection != null) {
+                int activeDays = config.getInt("penalty.active-days");
+                int period = config.getInt("penalty.elo-lost.period");
+                long eloLost = config.getLong("penalty.elo-lost.amount");
+                penaltyData = new PenaltyData(activeDays, period, eloLost);
+            }
+            this.ranks.putIfAbsent(id, new SPRankImpl(this, id, elo, name, penaltyData));
         });
     }
 

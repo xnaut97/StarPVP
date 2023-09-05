@@ -4,18 +4,19 @@ import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.cooldown.Cooldown;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
+import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import com.github.tezvn.starpvp.core.SPPluginImpl;
 import com.github.tezvn.starpvp.core.utils.MathUtils;
-import com.github.tezvn.starpvp.core.utils.time.TimeUnits;
 import com.github.tezvn.starpvp.core.utils.time.TimeUtils;
 import com.google.common.collect.Maps;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class SPPlayerImpl implements SPPlayer {
 
@@ -49,13 +50,13 @@ public class SPPlayerImpl implements SPPlayer {
     }
 
     @Override
-    public OfflinePlayer getPlayer() {
+    public OfflinePlayer asOfflinePlayer() {
         return Bukkit.getOfflinePlayer(this.getUniqueId());
     }
 
     @Override
-    public long getTotalEloPoint() {
-        return this.rank.getElo() + this.eloPoint;
+    public Player asPlayer() {
+        return asOfflinePlayer().getPlayer();
     }
 
     @Override
@@ -65,73 +66,38 @@ public class SPPlayerImpl implements SPPlayer {
 
     @Override
     public void setEloPoint(long eloPoint) {
-        this.eloPoint = eloPoint;
+        this.eloPoint = Math.max(0, eloPoint);
+        updateRank();
     }
 
     @Override
-    public void addEloPoint(long starPoint) {
-//        if(eloPoint > 0) {
-//            long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
-//            long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
-//            if(deathCount > killCount) {
-//                double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
-//                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-//                if (deathPercent >= getPercent("hell-sp.activate"))
-//                    eloPoint = (long) (eloPoint - (eloPoint * getMultiplier("hell-sp.multiplier.kill")));
-//            }else {
-//                double killPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.KILL_COUNT),
-//                        (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-//                if(killPercent >= getPercent("high-sp.chance"))
-//                    eloPoint += (eloPoint*getMultiplier("high-sp.multiplier"));
-//            }
-//        }
-        this.eloPoint += starPoint;
-        if(getRank().isHighest())
-            return;
-        long offset = getTotalEloPoint() - getRank().getNext().getElo();
-        if(offset > 0) {
-            this.eloPoint = offset;
-            this.rank = getRank().getNext();
-        }
+    public void addEloPoint(long eloPoint) {
+        this.eloPoint += Math.abs(eloPoint);
+        updateRank();
     }
 
     @Override
-    public void subtractEloPoint(long starPoint) {
-//        long deathCount = getStatistic(PlayerStatistic.DEATH_COUNT);
-//        long killCount = getStatistic(PlayerStatistic.KILL_COUNT);
-//        if(deathCount > killCount) {
-//            double deathPercent = MathUtils.getPercent((int) getStatistic(PlayerStatistic.DEATH_COUNT),
-//                    (int) getStatistic(PlayerStatistic.TOTAL_COMBAT_TIMES));
-//            if (deathPercent >= getPercent("hell-sp.activate"))
-//                eloPoint = (long) (eloPoint + (eloPoint * getMultiplier("hell-sp.multiplier.death")));
-//        }
-        if(getEloPoint() - starPoint > 0) {
-            this.eloPoint -= starPoint;
-            return;
+    public void subtractEloPoint(long eloPoint) {
+        this.eloPoint -= Math.abs(eloPoint);
+        updateRank();
+    }
+
+    private void updateRank() {
+        RankManager rankManager = JavaPlugin.getPlugin(SPPluginImpl.class).getRankManager();
+        List<SPRank> sorted = rankManager.getRanks().stream().sorted(Comparator.comparing(
+                SPRank::getElo, Comparator.naturalOrder())).toList();
+        int order = 0;
+        for (int i = 0; i < sorted.size(); i++) {
+            SPRank rank = sorted.get(i);
+            if (rank.getElo() > getEloPoint()) break;
+            order = i;
         }
-        if(getRank().isLowest()) {
-            this.eloPoint = 0;
-            return;
-        }
-        long offset = getRank().getElo() - getRank().getPrevious().getElo();
-        this.eloPoint = offset - starPoint;
-        setRank(getRank().getPrevious());
+        this.rank = sorted.get(order);
     }
 
     @Override
     public SPRank getRank() {
         return rank;
-    }
-
-    @Override
-    public void setRank(SPRank rank) {
-        setRank(rank, false);
-    }
-
-    @Override
-    public void setRank(SPRank rank, boolean resetSP) {
-        this.rank = rank;
-        setEloPoint(resetSP ? 0 : this.eloPoint);
     }
 
     @Override
@@ -211,8 +177,7 @@ public class SPPlayerImpl implements SPPlayer {
         map.put("uuid", getUniqueId().toString());
         map.put("name", getPlayerName());
         map.put("rank", getRank().getId());
-        map.put("elo.total", String.valueOf(this.getTotalEloPoint()));
-        map.put("elo.current", String.valueOf(this.getEloPoint()));
+        map.put("elo", String.valueOf(this.getEloPoint()));
         statistic.forEach((type, value) -> map.put("statistic." + type.name(), value));
         if (getCooldown() != null) {
             map.put("cooldown.type", getCooldown().getType().name());

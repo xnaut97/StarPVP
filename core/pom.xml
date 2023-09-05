@@ -26,6 +26,7 @@
                 <configuration>
                     <source>17</source>
                     <target>17</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
                 </configuration>
             </plugin>
             <plugin>
@@ -40,9 +41,51 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+<!--                            <relocations>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>dev.dejvokep.boostedyaml</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.boostedyaml</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>com.cryptomorin.xseries</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.xseries</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>com.zaxxer.hikari</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.hikari</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>de.tr7zw.changeme.nbtapi</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.nbtapi</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>de.tr7zw.changeme.nbtapi</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.tr7zw.nbtapi</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>de.tr7zw.annotations</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.tr7zw.annotations</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>org.intellij.lang.annotations</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.intellij.lang.annotations</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                                <relocation>-->
+<!--                                    <pattern>org.jetbrains.annotations</pattern>-->
+<!--                                    <shadedPattern>com.github.tezvn.shaded.jetbrains.annotations</shadedPattern>-->
+<!--                                </relocation>-->
+<!--                            </relocations>-->
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                </configuration>
             </plugin>
         </plugins>
         <resources>
@@ -104,9 +147,15 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>io.papermc.paper</groupId>
-            <artifactId>paper-api</artifactId>
-            <version>1.19.4-R0.1-SNAPSHOT</version>
+            <groupId>me.clip</groupId>
+            <artifactId>placeholderapi</artifactId>
+            <version>2.11.3</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.UlrichBR</groupId>
+            <artifactId>UClansV6-API</artifactId>
+            <version>6.9.0-r8</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

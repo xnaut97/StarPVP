@@ -3,6 +3,7 @@ package com.github.tezvn.starpvp.core.utils;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.api.chat.hover.content.Content;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -15,6 +16,8 @@ public class ClickableText {
 
     private ClickEvent clickAction;
 
+    public ClickableText() {}
+
     public ClickableText(String text) {
         Objects.requireNonNull(text);
         this.text = text.replace("&", "§");
@@ -26,6 +29,11 @@ public class ClickableText {
                 .map(e -> new TextComponent(e.replace("&", "§")))
                 .toArray(TextComponent[]::new);
         this.hoverAction = new HoverEvent(action, texts);
+        return this;
+    }
+
+    public ClickableText setHoverAction(HoverEvent.Action action, Content... content) {
+        this.hoverAction = new HoverEvent(action, content);
         return this;
     }
 

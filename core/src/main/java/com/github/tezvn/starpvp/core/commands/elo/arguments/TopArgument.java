@@ -6,6 +6,7 @@ import com.google.common.collect.Lists;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.permissions.PermissionDefault;
 
 import java.util.List;
 
@@ -28,6 +29,16 @@ public class TopArgument extends EloArgument {
     @Override
     public String getUsage() {
         return "elo ranking/top";
+    }
+
+    @Override
+    public PermissionDefault getPermissionDefault() {
+        return PermissionDefault.TRUE;
+    }
+
+    @Override
+    public boolean allowConsole() {
+        return false;
     }
 
     @Override

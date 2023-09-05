@@ -1,26 +1,32 @@
 package com.github.tezvn.starpvp.core.rank;
 
-import com.github.tezvn.starpvp.api.rank.CompareResult;
 import com.github.tezvn.starpvp.api.rank.RankManager;
+import com.github.tezvn.starpvp.api.rank.RankPenalty;
 import com.github.tezvn.starpvp.api.rank.SPRank;
-
-import java.util.Comparator;
+import org.jetbrains.annotations.Nullable;
 
 public class SPRankImpl implements SPRank {
 
     private final String id;
 
-    private final long sp;
+    private final long elo;
 
     private final String displayName;
 
     private final RankManager rankManager;
 
-    public SPRankImpl(RankManager rankManager, String id, long sp, String displayName) {
+    private final RankPenalty penalty;
+
+    public SPRankImpl(RankManager rankManager, String id, long elo, String displayName) {
+        this(rankManager, id, elo, displayName, null);
+    }
+
+    public SPRankImpl(RankManager rankManager, String id, long elo, String displayName, PenaltyData data) {
         this.rankManager = rankManager;
         this.id = id;
-        this.sp = sp;
+        this.elo = elo;
         this.displayName = displayName;
+        this.penalty = data == null ? null :  new RankPenaltyImpl(this, data);
     }
 
     @Override
@@ -30,7 +36,7 @@ public class SPRankImpl implements SPRank {
 
     @Override
     public long getElo() {
-        return this.sp;
+        return this.elo;
     }
 
     @Override
@@ -39,34 +45,19 @@ public class SPRankImpl implements SPRank {
     }
 
     @Override
-    public SPRank getNext() {
-        return rankManager.getRanks().stream().filter(rank -> rank.getElo() > getElo())
-                .min(Comparator.comparing(SPRank::getElo, Comparator.naturalOrder())).orElse(this);
-    }
-
-    @Override
-    public SPRank getPrevious() {
-        return rankManager.getRanks().stream().filter(rank -> rank.getElo() < getElo())
-                .min(Comparator.comparing(SPRank::getElo, Comparator.naturalOrder())).orElse(this);
-
-    }
-
-    @Override
     public boolean isHighest() {
-        return getNext().getElo() == getElo();
+        return rankManager.getHighestRank().getElo() == getElo();
     }
 
     @Override
     public boolean isLowest() {
-        return getPrevious().getElo() == getElo();
+        return rankManager.getLowestRank().getElo() == getElo();
     }
 
+    @Nullable
     @Override
-    public CompareResult compare(SPRank other) {
-        if (getElo() > other.getElo())
-            return CompareResult.HIGHER;
-        if (getElo() < other.getElo())
-            return CompareResult.LOWER;
-        return CompareResult.EQUAL;
+    public RankPenalty getPenalty() {
+        return penalty;
     }
+
 }

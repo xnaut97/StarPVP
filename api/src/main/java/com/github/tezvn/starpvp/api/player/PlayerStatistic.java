@@ -5,4 +5,6 @@ public enum PlayerStatistic {
     DEATH_COUNT,
     COMBAT_LOGOUT_TIMES,
     COMBAT_TIMESTAMP,
+    LAST_COMBAT_TIME,
+    LAST_PENALTY_TIME,
 }

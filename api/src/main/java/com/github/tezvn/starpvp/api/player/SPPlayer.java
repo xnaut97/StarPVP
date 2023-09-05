@@ -1,11 +1,10 @@
 package com.github.tezvn.starpvp.api.player;
 
 import com.github.tezvn.starpvp.api.player.cooldown.Cooldown;
-import com.github.tezvn.starpvp.api.player.cooldown.CooldownType;
 import com.github.tezvn.starpvp.api.rank.SPRank;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -15,23 +14,19 @@ public interface SPPlayer {
 
     String getPlayerName();
 
-    OfflinePlayer getPlayer();
+    OfflinePlayer asOfflinePlayer();
 
-    long getTotalEloPoint();
+    Player asPlayer();
 
     long getEloPoint();
 
     void setEloPoint(long eloPoint);
 
-    void addEloPoint(long starPoint);
+    void addEloPoint(long eloPoint);
 
-    void subtractEloPoint(long starPoint);
+    void subtractEloPoint(long eloPoint);
 
     SPRank getRank();
-
-    void setRank(SPRank rank);
-
-    void setRank(SPRank rank, boolean resetSP);
 
     long getStatistic(PlayerStatistic statistic);
 

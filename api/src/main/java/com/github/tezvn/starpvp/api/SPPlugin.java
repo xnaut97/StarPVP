@@ -16,4 +16,6 @@ public interface SPPlugin extends Plugin {
 
     MySQL getDatabase();
 
+    void reload();
+
 }
