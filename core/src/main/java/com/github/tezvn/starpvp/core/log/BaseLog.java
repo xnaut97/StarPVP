@@ -49,7 +49,7 @@ public abstract class BaseLog {
     }
 
     private File getFile() throws Exception {
-        SPPlugin plugin = JavaPlugin.getPlugin(SPPluginImpl.class);
+        SPPlugin plugin = ((SPPlugin) getPlugin());
         File folder = getFolder();
         File file = getLatest();
         long maxSize = plugin.getDocument().getInt("log.max-file-size", 10);

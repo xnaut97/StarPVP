@@ -13,6 +13,12 @@ public class ClanIntegration {
         return JavaPlugin.getPlugin(Clans.class).getPlayerAPI().getPlayerClan(player.getUniqueId());
     }
 
+    public static boolean inSameClan(Player player, Player other) {
+        ClanData clan = getClan(player);
+        if(clan == null) return false;
+        return clan.getMembers().contains(other.getUniqueId());
+    }
+
     private static boolean isHooked() {
         return Bukkit.getPluginManager().getPlugin("UltimateClans") != null;
     }

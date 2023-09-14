@@ -453,7 +453,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
             return this.commands.values().stream().filter(command -> {
                 if (!command.getName().startsWith(start))
                     return false;
-                if (command.getPermission() == null || command.getPermission().length() == 0)
+                if (command.getPermission() == null || command.getPermission().isEmpty())
                     return true;
                 return sender.hasPermission(command.getPermission());
             }).collect(Collectors.toList());

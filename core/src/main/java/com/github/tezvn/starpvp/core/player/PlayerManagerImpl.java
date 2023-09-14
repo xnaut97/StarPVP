@@ -40,6 +40,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -48,7 +49,10 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -491,19 +495,20 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private void subtractTeamMembersElo(Player player, long toSubtract) {
         ClanData clan = ClanIntegration.getClan(player);
-        if(clan == null) return;
-
-        StringBuilder sb = new StringBuilder(" | Online members: ");
-        clan.getOnlineMembers().forEach(p -> {
+        if (clan == null) return;
+        if (clan.getOnlineMembers().isEmpty()) return;
+        StringBuilder sb = new StringBuilder("Clan: " + clan.getTagNoColor() + " | Online members: ");
+        clan.getOnlineMembers().stream().filter(u -> !u.equals(player.getUniqueId())).forEach(p -> {
             SPPlayer spPlayer = getPlayer(p);
             if (spPlayer == null) return;
-
+            MessageUtils.sendMessage(spPlayer.asPlayer(), "&6Nười chơi &b" + player.getName() + " &6vừa chết, bạn bị trừ điểm!");
+            long oldElo = spPlayer.getEloPoint();
             long divided = Math.max(1, toSubtract / 2);
             subtractElo(spPlayer, divided);
             saveToDatabase(p);
-            sb.append(spPlayer.getPlayerName()).append(" (").append(spPlayer.getEloPoint()).append(") (-").append(divided).append(")");
+            sb.append(spPlayer.getPlayerName()).append(" (").append(oldElo).append(" -> ").append(spPlayer.getEloPoint()).append(") (-").append(divided).append(") ");
         });
-        if (this.teamLog != null) this.teamLog.write("Clan: " + clan.getId(), sb.toString());
+        if (this.teamLog != null) this.teamLog.write(sb.toString());
     }
 
     private void addElo(SPPlayer spPlayer, long toAdd) {
@@ -612,6 +617,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     public void onEntityDamage(EntityDamageByEntityEvent event) {
         if (event.getEntity() instanceof Player victim && event.getDamager() instanceof Player damager) {
             if (getPVPRegion(victim.getLocation()).isPresent() && getPVPRegion(damager.getLocation()).isPresent()) {
+                if (ClanIntegration.inSameClan(damager, victim)) return;
                 applyCombatRestriction(victim);
                 applyCombatRestriction(damager);
             }
@@ -725,14 +731,14 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
             StringBuilder sb = new StringBuilder(player.getName() + " logged out (@elo-point@) (-@subtract-elo@)");
             long oldElo = spPlayer.getEloPoint();
-            List<String> commands = loggedPenalty.getOrDefault(String.valueOf(combatLogoutTimes+1), loggedPenalty.entrySet().stream()
+            List<String> commands = loggedPenalty.getOrDefault(String.valueOf(combatLogoutTimes + 1), loggedPenalty.entrySet().stream()
                     .filter(entry -> {
-                        if(entry.getKey().equals("default")) return false;
+                        if (entry.getKey().equals("default")) return false;
                         String[] split = entry.getKey().split("-");
-                        if(split.length != 2) return false;
+                        if (split.length != 2) return false;
                         int min = Integer.parseInt(split[0]);
                         int max = Integer.parseInt(split[1]);
-                        return min <= combatLogoutTimes+1 && combatLogoutTimes+1 <= max;
+                        return min <= combatLogoutTimes + 1 && combatLogoutTimes + 1 <= max;
                     }).map(Map.Entry::getValue).findAny().orElse(loggedPenalty.getOrDefault("default", Lists.newArrayList())));
 
             commands.stream().map(s -> s.replace("@player-name@", player.getName()))
@@ -748,10 +754,10 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
             StringBuilder broadcast = new StringBuilder("&6Người chơi &b" + player.getName() + " đã thoát trong lúc giao tranh");
             long subtract = oldElo - spPlayer.getEloPoint();
-            if(subtract > 0) broadcast.append(", bị &c-").append(subtract).append(" &6điểm");
+            if (subtract > 0) broadcast.append(", bị &c-").append(subtract).append(" &6điểm");
 
             plugin.getDocument().getOptionalBoolean("penalty.combat-logged.kill-on-logout").ifPresent(value -> {
-                if(!value) return;
+                if (!value) return;
                 player.setHealth(0);
                 broadcast.append(", bị xử chết");
             });
@@ -766,7 +772,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         saveToDatabase(player);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
         SPPlayer spPlayer = getPlayer(player);
@@ -820,7 +826,21 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     public void onPlayerToggleSwing(EntityToggleGlideEvent event) {
         Entity entity = event.getEntity();
         if (!(entity instanceof Player)) return;
+    }
 
+    @EventHandler
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        HumanEntity player = event.getPlayer();
+        SPPlayer spPlayer = getPlayer(player.getUniqueId());
+        if (spPlayer == null) return;
+
+        Inventory inventory = event.getInventory();
+        InventoryHolder holder = inventory.getHolder();
+        if (holder == null) return;
+        if (holder.getClass().getSimpleName().equals("MenuHolder")) {
+            if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) > 0)
+                event.setCancelled(true);
+        }
     }
 
     private void applyReviveCooldown(Player player) {
