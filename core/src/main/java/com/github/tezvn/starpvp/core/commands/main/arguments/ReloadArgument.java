@@ -1,7 +1,6 @@
 package com.github.tezvn.starpvp.core.commands.main.arguments;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
-import com.github.tezvn.starpvp.core.commands.AbstractArgument;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;

@@ -30,10 +30,19 @@ public class DateTime {
         return year;
     }
 
-    public boolean compare(DateTime other) {
+    public boolean isAfter(DateTime other) {
         if(getYear() > other.getYear()) return true;
         if(getMonth() > other.getMonth()) return true;
         return getDay() > other.getDay();
+    }
+
+    @Override
+    public String toString() {
+        return "DateTime{" +
+                "day=" + day +
+                ", month=" + month +
+                ", year=" + year +
+                '}';
     }
 
 }

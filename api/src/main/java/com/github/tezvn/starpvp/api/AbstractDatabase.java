@@ -6,7 +6,6 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.plugin.Plugin;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -157,7 +156,9 @@ public abstract class AbstractDatabase {
                     if (element.getType() == DatabaseElement.Type.VAR_CHAR)
                         typeBuilder.append("(255)");
                     builder.append("`").append(element.getName()).append("` ")
-                            .append(typeBuilder).append(" NULL, ");
+                            .append(typeBuilder).append(" NULL ");
+                    if(element.isPrimary) builder.append(" PRIMARY KEY");
+                    builder.append(", ");
                 }
                 builder.delete(builder.length() - 2, builder.length());
                 builder.append(");");
@@ -202,6 +203,7 @@ public abstract class AbstractDatabase {
                 String queryValue = Arrays.stream(insertions).map(i -> "'" + i.getValue() + "'").collect(Collectors.joining(", "));
                 query.append(queryKey).append(") VALUES (").append(queryValue).append(")");
                 connection.prepareStatement(query.toString()).executeUpdate();
+                connection.close();
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -222,6 +224,7 @@ public abstract class AbstractDatabase {
             try (Connection connection = getConnection()){
                 String query = "DELETE FROM `" + table + "` WHERE `" + key + "`='" + value + "'";
                 connection.createStatement().executeUpdate(query);
+                connection.close();
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -237,6 +240,7 @@ public abstract class AbstractDatabase {
                 query.delete(query.length() - 2, query.length()).append(" ");
                 query.append("WHERE `").append(toUpdate.getKey()).append("`='").append(toUpdate.getValue()).append("';");
                 connection.createStatement().executeUpdate(query.toString());
+                connection.close();
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -274,11 +278,18 @@ public abstract class AbstractDatabase {
     public static class DatabaseElement {
         private final String name;
 
-        private final Type synchronizeType;
+        private final Type type;
 
-        public DatabaseElement(String name, Type synchronizeType) {
+        private final boolean isPrimary;
+
+        public DatabaseElement(String name, Type type) {
+            this(name, type, false);
+        }
+
+        public DatabaseElement(String name, Type type, boolean isPrimary) {
             this.name = name;
-            this.synchronizeType = synchronizeType;
+            this.type = type;
+            this.isPrimary = isPrimary;
         }
 
         public String getName() {
@@ -286,7 +297,11 @@ public abstract class AbstractDatabase {
         }
 
         public Type getType() {
-            return this.synchronizeType;
+            return this.type;
+        }
+
+        public boolean isPrimary() {
+            return isPrimary;
         }
 
         public enum Type {

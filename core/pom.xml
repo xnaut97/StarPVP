@@ -159,5 +159,12 @@
             <scope>system</scope>
             <systemPath>${project.basedir}/../libs/UltimateClans-6.12.3.jar</systemPath>
         </dependency>
+        <dependency>
+            <groupId>com.extendedclip.deluxemenus</groupId>
+            <artifactId>DeluxeMenus</artifactId>
+            <version>1.13.7-Release</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../libs/DeluxeMenus-1.13.7-Release.jar</systemPath>
+        </dependency>
     </dependencies>
 </project>

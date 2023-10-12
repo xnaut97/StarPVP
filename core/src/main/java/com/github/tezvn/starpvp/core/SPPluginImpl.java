@@ -55,6 +55,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         this.playerManager = new PlayerManagerImpl(this);
         this.commandManager = new CommandManager(this);
         registerExpansion();
+//        new DeluxeMenuListener(this);
     }
 
     @Override
@@ -157,16 +158,14 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
             getLogger().info("Use local cache instead.");
             return;
         }
-        boolean createResult = this.database.createTable(tableName,
-                new DatabaseElement("uuid", DatabaseElement.Type.VAR_CHAR),
+        this.database.createTable(tableName,
+                new DatabaseElement("uuid", DatabaseElement.Type.VAR_CHAR, true),
                 new DatabaseElement("player_name", DatabaseElement.Type.VAR_CHAR),
                 new DatabaseElement("rank", DatabaseElement.Type.VAR_CHAR),
                 new DatabaseElement("elo", DatabaseElement.Type.VAR_CHAR),
                 new DatabaseElement("statistic", DatabaseElement.Type.LONG_TEXT),
                 new DatabaseElement("cooldown", DatabaseElement.Type.VAR_CHAR),
                 new DatabaseElement("kills_cooldown", DatabaseElement.Type.LONG_TEXT));
-        if (createResult)
-            getLogger().info("Created table '" + tableName + "' success!");
     }
 
 }

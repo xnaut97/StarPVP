@@ -29,7 +29,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import de.tr7zw.changeme.nbtapi.NBTItem;
-import me.ulrich.clans.Clans;
 import me.ulrich.clans.data.ClanData;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.HoverEvent;
@@ -40,7 +39,6 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -49,14 +47,10 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.*;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 
 import java.io.File;
@@ -92,11 +86,11 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         this.plugin = plugin;
         this.playerLog = ((SPPluginImpl) plugin).getLog(LogType.PLAYER);
         this.teamLog = ((SPPluginImpl) plugin).getLog(LogType.TEAM);
-        new PlayerHandler(this);
         registerOnline();
         loadFromDatabase();
         loadLowEloPenalty();
         loadLoggedPenalty();
+        new PlayerHandler(this);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -150,7 +144,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     @Override
     public List<SPPlayer> getPlayers() {
-        return List.copyOf(this.players.values());
+        return new ArrayList<>(this.players.values());
     }
 
     @Override
@@ -161,7 +155,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     @Override
     public SPPlayer getPlayer(String name) {
         return this.players.values().stream()
-                .filter(p -> p.asOfflinePlayer().getName() != null && p.asOfflinePlayer().getName().equals(name))
+                .filter(p -> p.asOfflinePlayer().getName() != null && Objects.equals(p.asOfflinePlayer().getName(), name))
                 .findAny().orElse(null);
     }
 
@@ -356,10 +350,13 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
                         }
                         spPlayer.setCooldown(cooldown);
                     }
-                    config.getConfigurationSection("statistic").getKeys(false).forEach(s -> {
-                        PlayerStatistic statistic = PlayerStatistic.valueOf(s);
-                        spPlayer.setStatistic(statistic, config.getLong("statistic." + s));
-                    });
+                    ConfigurationSection statisticSection = config.getConfigurationSection("statistic");
+                    if (statisticSection != null) {
+                        statisticSection.getKeys(false).forEach(s -> {
+                            PlayerStatistic statistic = PlayerStatistic.valueOf(s);
+                            spPlayer.setStatistic(statistic, config.getLong("statistic." + s));
+                        });
+                    }
                     ConfigurationSection kdSection = config.getConfigurationSection("kills-cooldown");
                     if (kdSection != null)
                         kdSection.getKeys(false).forEach(s -> {
@@ -772,7 +769,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         saveToDatabase(player);
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
         SPPlayer spPlayer = getPlayer(player);
@@ -828,21 +825,6 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         if (!(entity instanceof Player)) return;
     }
 
-    @EventHandler
-    public void onInventoryOpen(InventoryOpenEvent event) {
-        HumanEntity player = event.getPlayer();
-        SPPlayer spPlayer = getPlayer(player.getUniqueId());
-        if (spPlayer == null) return;
-
-        Inventory inventory = event.getInventory();
-        InventoryHolder holder = inventory.getHolder();
-        if (holder == null) return;
-        if (holder.getClass().getSimpleName().equals("MenuHolder")) {
-            if (spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP) > 0)
-                event.setCancelled(true);
-        }
-    }
-
     private void applyReviveCooldown(Player player) {
         SPPlayer spPlayer = getPlayer(player);
         plugin.getDocument().getOptionalString("cooldown.death").ifPresent(duration -> {
@@ -868,10 +850,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     }
 
     private void applyRestriction(Player player) {
-        player.setFlying(false);
-        if (player.getGameMode() != GameMode.SURVIVAL)
-            player.setGameMode(GameMode.SURVIVAL);
-        player.removePotionEffect(PotionEffectType.INVISIBILITY);
+
     }
 
     public SPPlugin getPlugin() {
