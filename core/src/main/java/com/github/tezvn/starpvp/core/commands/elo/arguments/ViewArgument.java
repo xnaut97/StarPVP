@@ -32,11 +32,6 @@ public class ViewArgument extends EloArgument {
     }
 
     @Override
-    public PermissionDefault getPermissionDefault() {
-        return PermissionDefault.OP;
-    }
-
-    @Override
     public void playerExecute(Player player, String[] args) {
         if(args.length == 0) {
             MessageUtils.sendMessage(player, "&cVui lòng nhập tên người chơi!");

@@ -1,4 +1,4 @@
-config-version: 12
+config-version: 13
 
 database:
   toggle: true
@@ -20,6 +20,8 @@ database:
     idle-timeout: 600000
     # Thời gian tối đa mà một kết nối có thể sống (30 phút)
     max-life-time: 1800000
+
+auto-cache: '5m'
 
 hell-elo:
   # Percent to activate Hell SP when death count is accounted

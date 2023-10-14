@@ -3,6 +3,7 @@ package com.github.tezvn.starpvp.core;
 import com.github.tezvn.starpvp.api.AbstractDatabase.*;
 import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
+import com.github.tezvn.starpvp.api.player.PlayerCache;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.github.tezvn.starpvp.core.commands.CommandManager;
@@ -10,6 +11,7 @@ import com.github.tezvn.starpvp.core.log.BaseLog;
 import com.github.tezvn.starpvp.core.log.LogType;
 import com.github.tezvn.starpvp.core.log.PlayerLog;
 import com.github.tezvn.starpvp.core.log.TeamLog;
+import com.github.tezvn.starpvp.core.player.DefaultPlayerCache;
 import com.github.tezvn.starpvp.core.player.PlayerManagerImpl;
 import com.github.tezvn.starpvp.core.rank.RankManagerImpl;
 import com.github.tezvn.starpvp.core.utils.BaseMenu;
@@ -41,6 +43,8 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
 
     private RankManager rankManager;
 
+    private PlayerCache playerCache;
+
     private final Map<LogType, BaseLog> logs = Maps.newHashMap();
 
     private PluginExpansion expansion;
@@ -51,6 +55,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         setupConfig();
         setupDatabase();
         registerLog();
+        this.playerCache = new DefaultPlayerCache(this);
         this.rankManager = new RankManagerImpl(this);
         this.playerManager = new PlayerManagerImpl(this);
         this.commandManager = new CommandManager(this);
@@ -83,6 +88,11 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
 
     public MySQL getDatabase() {
         return database;
+    }
+
+    @Override
+    public PlayerCache getPlayerCache() {
+        return playerCache;
     }
 
     @Override

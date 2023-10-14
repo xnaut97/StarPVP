@@ -61,7 +61,7 @@ public class PlayerHandler extends BukkitRunnable {
                         }
                         spPlayer.subtractEloPoint(penalty.getEloLost());
                         spPlayer.setStatistic(PlayerStatistic.LAST_PENALTY_TIME, now);
-                        getPlayerManager().saveToDatabase(spPlayer.getUniqueId());
+                        plugin.getPlayerCache().queue(offlinePlayer);
                         return;
                     }
                 }
@@ -87,7 +87,8 @@ public class PlayerHandler extends BukkitRunnable {
                     MessageUtils.sendTitle(offlinePlayer.getPlayer(), "&a&l✔", "&7Bạn đã thoát giao tranh");
                     XSound.ENTITY_PLAYER_LEVELUP.play(offlinePlayer.getPlayer());
                 }
-                getPlayerManager().saveToDatabase(spPlayer.getUniqueId());
+                plugin.getPlayerCache().queue(offlinePlayer);
+                return;
             }
 
             Cooldown cooldown = spPlayer.getCooldown();
@@ -104,9 +105,9 @@ public class PlayerHandler extends BukkitRunnable {
                 }
                 // Xóa cdr
                 spPlayer.removeCooldown();
+                plugin.getPlayerCache().queue(offlinePlayer);
                 if (offlinePlayer.getPlayer() != null)
                     XSound.ENTITY_PLAYER_LEVELUP.play(offlinePlayer.getPlayer());
-                getPlayerManager().saveToDatabase(spPlayer.getUniqueId());
             }
         });
         this.time = now;

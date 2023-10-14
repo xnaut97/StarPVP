@@ -1,6 +1,7 @@
 package com.github.tezvn.starpvp.core.commands;
 
 import com.github.tezvn.starpvp.api.SPPlugin;
+import com.github.tezvn.starpvp.api.player.PlayerCache;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.google.common.collect.Lists;
@@ -12,8 +13,11 @@ public abstract class AbstractArgument extends AbstractCommand.CommandArgument {
 
     private final SPPlugin plugin;
 
+    private final PlayerCache playerCache;
+
     public AbstractArgument(SPPlugin plugin) {
         this.plugin = plugin;
+        this.playerCache = plugin.getPlayerCache();
     }
 
     public SPPlugin getPlugin() {
@@ -26,6 +30,10 @@ public abstract class AbstractArgument extends AbstractCommand.CommandArgument {
 
     public RankManager getRankManager() {
         return getPlugin().getRankManager();
+    }
+
+    public PlayerCache getPlayerCache() {
+        return playerCache;
     }
 
     @Override

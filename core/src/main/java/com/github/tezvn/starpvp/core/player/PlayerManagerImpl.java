@@ -4,6 +4,7 @@ import com.cryptomorin.xseries.XSound;
 import com.github.tezvn.starpvp.api.AbstractDatabase.DatabaseInsertion;
 import com.github.tezvn.starpvp.api.AbstractDatabase.MySQL;
 import com.github.tezvn.starpvp.api.SPPlugin;
+import com.github.tezvn.starpvp.api.player.PlayerCache;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.player.PlayerStatistic;
 import com.github.tezvn.starpvp.api.player.SPPlayer;
@@ -82,10 +83,13 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private final Map<String, List<String>> loggedPenalty = Maps.newHashMap();
 
+    private final PlayerCache playerCache;
+    
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
         this.playerLog = ((SPPluginImpl) plugin).getLog(LogType.PLAYER);
         this.teamLog = ((SPPluginImpl) plugin).getLog(LogType.TEAM);
+        this.playerCache = plugin.getPlayerCache();
         registerOnline();
         loadFromDatabase();
         loadLowEloPenalty();
@@ -215,6 +219,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     @Override
     public void saveToDatabase(UUID uuid) {
+        if(getPlugin().getDocument() == null) return;
         SPPlayer spPlayer = getPlayer(uuid);
         if (spPlayer == null)
             return;
@@ -495,14 +500,14 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         if (clan == null) return;
         if (clan.getOnlineMembers().isEmpty()) return;
         StringBuilder sb = new StringBuilder("Clan: " + clan.getTagNoColor() + " | Online members: ");
-        clan.getOnlineMembers().stream().filter(u -> !u.equals(player.getUniqueId())).forEach(p -> {
-            SPPlayer spPlayer = getPlayer(p);
+        clan.getOnlineMembers().stream().filter(u -> !u.equals(player.getUniqueId())).forEach(uuid -> {
+            SPPlayer spPlayer = getPlayer(uuid);
             if (spPlayer == null) return;
             MessageUtils.sendMessage(spPlayer.asPlayer(), "&6Nười chơi &b" + player.getName() + " &6vừa chết, bạn bị trừ điểm!");
             long oldElo = spPlayer.getEloPoint();
             long divided = Math.max(1, toSubtract / 2);
             subtractElo(spPlayer, divided);
-            saveToDatabase(p);
+            saveToDatabase(uuid);
             sb.append(spPlayer.getPlayerName()).append(" (").append(oldElo).append(" -> ").append(spPlayer.getEloPoint()).append(") (-").append(divided).append(") ");
         });
         if (this.teamLog != null) this.teamLog.write(sb.toString());
@@ -832,6 +837,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             spPlayer.setCooldown(new DeathCooldownImpl(tu.getNewTime()));
             spPlayer.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, 0L);
         });
+        saveToDatabase(player);
 
 //        long combatTimestamp = spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP);
 //        if (combatTimestamp == 0)

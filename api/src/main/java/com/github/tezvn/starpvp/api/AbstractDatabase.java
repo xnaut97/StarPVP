@@ -193,8 +193,9 @@ public abstract class AbstractDatabase {
         public boolean has(String table, String toFind, String key, Object value) {
             try (Connection connection = getConnection()){
                 String query = "SELECT `" + toFind + "` FROM `" + table + "` WHERE `" + key + "`='" + value + "'";
-
-                return connection.createStatement().executeQuery(query).next();
+                boolean has = connection.createStatement().executeQuery(query).next();
+                connection.close();
+                return has;
             } catch (Exception e) {
                 e.printStackTrace();
                 return false;
