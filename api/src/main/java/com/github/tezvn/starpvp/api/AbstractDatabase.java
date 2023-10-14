@@ -155,8 +155,13 @@ public abstract class AbstractDatabase {
                     StringBuilder typeBuilder = new StringBuilder(element.getType().name().replace("_", ""));
                     if (element.getType() == DatabaseElement.Type.VAR_CHAR)
                         typeBuilder.append("(255)");
-                    builder.append("`").append(element.getName()).append("` ")
-                            .append(typeBuilder).append(" NULL ");
+                    if (element.isPrimary) {
+                        builder.append("`").append(element.getName()).append("` ")
+                                .append(typeBuilder).append(" NOT NULL ");
+                    } else {
+                        builder.append("`").append(element.getName()).append("` ")
+                                .append(typeBuilder).append(" NULL ");
+                    }
                     if(element.isPrimary) builder.append(" PRIMARY KEY");
                     builder.append(", ");
                 }
@@ -202,6 +207,14 @@ public abstract class AbstractDatabase {
                 String queryKey = Arrays.stream(insertions).map(i -> "`" + i.getKey() + "`").collect(Collectors.joining(", "));
                 String queryValue = Arrays.stream(insertions).map(i -> "'" + i.getValue() + "'").collect(Collectors.joining(", "));
                 query.append(queryKey).append(") VALUES (").append(queryValue).append(")");
+                query.append(" ON DUPLICATE KEY UPDATE ");
+                for (DatabaseInsertion insertion: insertions) {
+                    if (insertion.getKey().equalsIgnoreCase("uuid")) {
+                        continue;
+                    }
+                    query.append("`").append(insertion.getKey()).append("`").append("=").append("'").append(insertion.getValue()).append("'").append(", ");
+                }
+                query.delete(query.length() - 2, query.length());
                 connection.prepareStatement(query.toString()).executeUpdate();
                 connection.close();
                 return true;
@@ -212,11 +225,11 @@ public abstract class AbstractDatabase {
         }
 
         public boolean addOrUpdate(String table, DatabaseInsertion check, DatabaseInsertion... insertions) {
-            if (check != null) {
-                boolean found = has(table, check.getKey(), check.getKey(), check.getValue());
-                if (found)
-                    return update(table, check, insertions);
-            }
+//            if (check != null) {
+//                boolean found = has(table, check.getKey(), check.getKey(), check.getValue());
+//                if (found)
+//                    return update(table, check, insertions);
+//            }
             return add(table, insertions);
         }
 
