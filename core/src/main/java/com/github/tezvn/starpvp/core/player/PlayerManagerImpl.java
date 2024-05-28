@@ -21,6 +21,7 @@ import com.github.tezvn.starpvp.core.player.cooldown.DeathCooldownImpl;
 import com.github.tezvn.starpvp.core.player.cooldown.LogoutCooldownImpl;
 import com.github.tezvn.starpvp.core.utils.ClickableText;
 import com.github.tezvn.starpvp.core.utils.MessageUtils;
+import com.github.tezvn.starpvp.core.utils.ThreadWorker;
 import com.github.tezvn.starpvp.core.utils.time.TimeUnits;
 import com.github.tezvn.starpvp.core.utils.time.TimeUtils;
 import com.google.common.collect.Lists;
@@ -31,6 +32,7 @@ import com.google.gson.JsonParser;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import de.tr7zw.changeme.nbtapi.NBTItem;
 import me.ulrich.clans.data.ClanData;
+import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.ItemTag;
@@ -84,14 +86,16 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     private final Map<String, List<String>> loggedPenalty = Maps.newHashMap();
 
     private final PlayerCache playerCache;
-    
+
+    private final Map<OfflinePlayer, Long> eloLost = Maps.newHashMap();
+
     public PlayerManagerImpl(SPPlugin plugin) {
         this.plugin = plugin;
         this.playerLog = ((SPPluginImpl) plugin).getLog(LogType.PLAYER);
         this.teamLog = ((SPPluginImpl) plugin).getLog(LogType.TEAM);
         this.playerCache = plugin.getPlayerCache();
-        registerOnline();
         loadFromDatabase();
+        registerOnline();
         loadLowEloPenalty();
         loadLoggedPenalty();
         new PlayerHandler(this);
@@ -114,23 +118,45 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
 
     private void registerOnline() {
         Bukkit.getOnlinePlayers().forEach(player -> {
-            if (getPlayer(player) == null)
+            if (getPlayer(player) == null) {
                 this.players.computeIfAbsent(player.getUniqueId(), uuid -> {
                     SPPlayer spPlayer = new SPPlayerImpl(player);
                     spPlayer.setEloPoint(1000);
-                    saveToDatabase(player);
                     return spPlayer;
                 });
+                saveToDatabase(player);
+            }
         });
     }
 
-    private void loadLowEloPenalty() {
+    public void updateEloLost(OfflinePlayer player, long elo) {
+        long eloLost = this.eloLost.getOrDefault(player, 0L) + elo;
+        this.eloLost.put(player, eloLost);
+        saveEloLost(player);
+    }
+
+    private void saveEloLost(OfflinePlayer player) {
+        long eloLost = this.eloLost.getOrDefault(player, -1L);
+        try {
+            File file = new File(plugin.getDataFolder() + "/elo-lost.yml");
+            if(!file.exists())
+                file.createNewFile();
+            FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+            config.set(Objects.requireNonNull(player.getName()), eloLost == -1 ? null : eloLost);
+            config.save(file);
+        }catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadLowEloPenalty() {
         plugin.getDocument().getOptionalSection("penalty.low-elo").ifPresent(section -> section.getKeys()
                 .forEach(key -> section.getOptionalStringList(key + ".commands")
                         .ifPresent(list -> lowEloPenalty.put(Long.parseLong(String.valueOf(key)), list))));
+        plugin.getLogger().info("Loaded " + lowEloPenalty.size() + " low-elo penalties.");
     }
 
-    private void loadLoggedPenalty() {
+    public void loadLoggedPenalty() {
         plugin.getDocument().getOptionalSection("penalty.combat-logged").ifPresent(section -> section.getKeys()
                 .forEach(key -> {
                     String keyStr = String.valueOf(key);
@@ -144,6 +170,15 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
                     section.getOptionalStringList(key.toString())
                             .ifPresent(list -> loggedPenalty.put(String.valueOf(key), list));
                 }));
+        plugin.getLogger().info("Loaded " + loggedPenalty.size() + " logged penalties.");
+    }
+
+    @Override
+    public void reload() {
+        this.lowEloPenalty.clear();
+        this.loggedPenalty.clear();
+        loadLowEloPenalty();
+        loadLoggedPenalty();
     }
 
     @Override
@@ -177,7 +212,9 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
                 ResultSet rs = statement.executeQuery();
                 while (rs.next()) {
                     UUID uuid = UUID.fromString(rs.getString("uuid"));
+                    String name = rs.getString("player_name");
                     SPPlayer spPlayer = new SPPlayerImpl(Bukkit.getOfflinePlayer(uuid));
+                    ((SPPlayerImpl) spPlayer).setPlayerName(name);
                     spPlayer.setEloPoint(Integer.parseInt(rs.getString("elo")));
                     Arrays.stream(rs.getString("statistic").split(",")).forEach(s -> {
                         String[] split = s.split(":");
@@ -450,6 +487,8 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         spVictim.setStatistic(PlayerStatistic.LAST_COMBAT_TIME, TimeUtils.newInstance().getNewTime());
         spKiller.setStatistic(PlayerStatistic.LAST_COMBAT_TIME, TimeUtils.newInstance().getNewTime());
 
+        spKiller.setStatistic(PlayerStatistic.LAST_PENALTY_TIME, 0);
+
         applyReviveCooldown(victim);
         int currentStreak = this.killStreaks.getOrDefault(killer.getUniqueId(), 0);
         this.killStreaks.put(killer.getUniqueId(), currentStreak + 1);
@@ -471,14 +510,16 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         components.add(new ClickableText(text).build());
         if (!itemName.isEmpty()) {
             if (item.getType() != Material.AIR && item.getAmount() > 0) {
-                components.add(new ClickableText(itemName)
+                boolean validColor = ChatColor.STRIP_COLOR_PATTERN.matcher(itemName).find();
+                components.add(new ClickableText(itemName, validColor)
                         .setHoverAction(HoverEvent.Action.SHOW_ITEM,
                                 new Item("minecraft:" + item.getType().toString().toLowerCase(),
                                         item.getAmount(), ItemTag.ofNbt(new NBTItem(item).getCompound().toString())))
                         .build());
             }
         }
-        Bukkit.getOnlinePlayers().stream().filter(p -> !(p.getUniqueId().equals(killer.getUniqueId())))
+        Bukkit.getOnlinePlayers().stream().filter(p ->
+                        !(p.getUniqueId().equals(killer.getUniqueId()) && p.getUniqueId().equals(victim.getUniqueId())))
                 .forEach(p -> p.spigot().sendMessage(components.toArray(new BaseComponent[0])));
 
         if (this.playerLog != null) this.playerLog.write(eloProcessor);
@@ -492,6 +533,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
         if (!victim.getUniqueId().toString().startsWith("00000000-"))
             Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
                 victim.spigot().respawn();
+                teleportToLobby(victim);
             });
     }
 
@@ -635,7 +677,7 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(player, 1f, -1f);
         }
         applyRestriction(player);
-        saveToDatabase(player);
+        ThreadWorker.submit(() -> saveToDatabase(player));
     }
 
     @EventHandler
@@ -692,26 +734,35 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         SPPlayer spPlayer = getPlayer(player);
-        if (spPlayer == null)
+        if (spPlayer == null) {
             spPlayer = this.players.computeIfAbsent(player.getUniqueId(), uuid -> {
                 SPPlayer spPlayer1 = new SPPlayerImpl(player);
                 spPlayer1.setEloPoint(1000);
-                saveToDatabase(player);
                 return spPlayer1;
             });
+            saveToDatabase(player);
+        }
         combatLogged.removeIf(u -> u.equals(player.getUniqueId()));
         Cooldown cooldown = spPlayer.getCooldown();
-        if (cooldown == null) return;
-        switch (cooldown.getType()) {
-            case COMBAT_DEATH -> {
-            }
-            case COMBAT_LOGOUT -> {
+        if (cooldown != null) {
+            switch (cooldown.getType()) {
+                case COMBAT_DEATH -> {
+                }
+                case COMBAT_LOGOUT -> {
 //                player.damage(player.getHealth());
 //                MessageUtils.sendTitle(player,
 //                        "&c&lBẠN BỊ TRỪ ĐIỂM!",
 //                        "&7Vì đã thoát trong lúc giao tranh.");
 //                XSound.BLOCK_ENCHANTMENT_TABLE_USE.play(player);
+                }
             }
+        }
+
+        long eloLost = this.eloLost.getOrDefault(player, -1L);
+        if(eloLost != -1) {
+            MessageUtils.sendMessage(player, "&cBạn đã bị trừ &6" + eloLost + " &cvì đã không online trong 1 khoảng thời gian!");
+            this.eloLost.remove(player);
+            saveEloLost(player);
         }
     }
 
@@ -727,12 +778,16 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             long combatLogoutTimes = spPlayer.getStatistic(PlayerStatistic.COMBAT_LOGOUT_TIMES);
             TimeUtils tu = TimeUtils.newInstance();
             plugin.getDocument().getOptionalString("cooldown.logout")
-                    .ifPresentOrElse(tu::add, () -> tu.add(TimeUnits.SECOND, 30));
-            spPlayer.setCooldown(new LogoutCooldownImpl(tu.getNewTime()));
+                    .ifPresentOrElse(duration -> {
+                        if(duration.isEmpty() || duration.equalsIgnoreCase("-1")) return;
+                        tu.add(duration);
+                        spPlayer.setCooldown(new LogoutCooldownImpl(tu.getNewTime()));
+                    }, () -> {});
             spPlayer.setStatistic(PlayerStatistic.COMBAT_LOGOUT_TIMES, combatLogoutTimes + 1);
 
             StringBuilder sb = new StringBuilder(player.getName() + " logged out (@elo-point@) (-@subtract-elo@)");
             long oldElo = spPlayer.getEloPoint();
+            System.out.println(player.getName() + "'s combat logout: " + spPlayer.getStatistic(PlayerStatistic.COMBAT_LOGOUT_TIMES));
             List<String> commands = loggedPenalty.getOrDefault(String.valueOf(combatLogoutTimes + 1), loggedPenalty.entrySet().stream()
                     .filter(entry -> {
                         if (entry.getKey().equals("default")) return false;
@@ -766,12 +821,11 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
             MessageUtils.broadcast(broadcast.toString());
 
             spPlayer.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, 0);
-
+            saveToDatabase(player);
             if (this.playerLog != null)
                 this.playerLog.write(sb.toString().replace("@elo-point@", String.valueOf(spPlayer.getEloPoint()))
                         .replace("@subtract-elo@", String.valueOf(spPlayer.getEloPoint() - oldElo)));
         }
-        saveToDatabase(player);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -833,11 +887,12 @@ public class PlayerManagerImpl implements PlayerManager, Listener {
     private void applyReviveCooldown(Player player) {
         SPPlayer spPlayer = getPlayer(player);
         plugin.getDocument().getOptionalString("cooldown.death").ifPresent(duration -> {
+            if(duration.isEmpty() || duration.equalsIgnoreCase("-1")) return;
             TimeUtils tu = TimeUtils.newInstance().add(duration);
             spPlayer.setCooldown(new DeathCooldownImpl(tu.getNewTime()));
             spPlayer.setStatistic(PlayerStatistic.COMBAT_TIMESTAMP, 0L);
+            saveToDatabase(player);
         });
-        saveToDatabase(player);
 
 //        long combatTimestamp = spPlayer.getStatistic(PlayerStatistic.COMBAT_TIMESTAMP);
 //        if (combatTimestamp == 0)

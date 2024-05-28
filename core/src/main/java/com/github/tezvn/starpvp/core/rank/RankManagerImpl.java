@@ -39,11 +39,11 @@ public class RankManagerImpl implements RankManager {
                 return;
             }
             PenaltyData penaltyData = null;
-            ConfigurationSection penaltySection = config.getConfigurationSection("penalty");
+            ConfigurationSection penaltySection = config.getConfigurationSection("ranks." + id + ".penalty");
             if(penaltySection != null) {
-                int activeDays = config.getInt("penalty.active-days");
-                int period = config.getInt("penalty.elo-lost.period");
-                long eloLost = config.getLong("penalty.elo-lost.amount");
+                int activeDays = config.getInt("ranks." + id + ".penalty.active-days");
+                int period = config.getInt("ranks." + id + ".penalty.elo-lost.period");
+                long eloLost = config.getLong("ranks." + id + ".penalty.elo-lost.amount");
                 penaltyData = new PenaltyData(activeDays, period, eloLost);
             }
             this.ranks.putIfAbsent(id, new SPRankImpl(this, id, elo, name, penaltyData));

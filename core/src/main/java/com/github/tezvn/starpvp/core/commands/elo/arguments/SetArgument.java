@@ -76,7 +76,7 @@ public class SetArgument extends EloArgument {
         if (args.length == 1)
             return getPlayerManager().getPlayers().stream()
                     .map(SPPlayer::getPlayerName)
-                    .filter(name -> name.startsWith(args[0]))
+                    .filter(name -> name != null && name.startsWith(args[0]))
                     .collect(Collectors.toList());
         if (args.length == 2)
             return Collections.singletonList("amount");

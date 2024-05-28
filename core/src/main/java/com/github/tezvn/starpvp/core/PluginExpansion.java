@@ -55,6 +55,10 @@ public class PluginExpansion extends PlaceholderExpansion {
                         case "death" -> {
                             return String.valueOf(plugin.getPlayerManager().getPlayer(player).getStatistic(PlayerStatistic.DEATH_COUNT));
                         }
+                        case "position" -> {
+                            int position = getPosition(player);
+                            return position == -1 ? "NaN" : String.valueOf(position);
+                        }
                     }
                 }
                 case "leaderboard", "bxh" -> {
@@ -85,8 +89,22 @@ public class PluginExpansion extends PlaceholderExpansion {
     }
 
     private SPPlayer getPlayer(int position) {
-        List<SPPlayer> sorted = plugin.getPlayerManager().getPlayers().stream()
-                .sorted(Comparator.comparing(SPPlayer::getEloPoint, Comparator.reverseOrder())).toList();
+        List<SPPlayer> sorted = getSortedPlayers();
         return position < 1 || position > sorted.size() ? null : sorted.get(position-1);
+    }
+
+    private int getPosition(OfflinePlayer player) {
+        List<SPPlayer> sorted = getSortedPlayers();
+        for(int i = 0; i < sorted.size(); i++) {
+            SPPlayer spPlayer = sorted.get(i);
+            if(spPlayer.getPlayerName().equals(player.getName()))
+                return i+1;
+        }
+        return -1;
+    }
+
+    private List<SPPlayer> getSortedPlayers() {
+        return plugin.getPlayerManager().getPlayers().stream()
+                .sorted(Comparator.comparing(SPPlayer::getEloPoint, Comparator.reverseOrder())).toList();
     }
 }

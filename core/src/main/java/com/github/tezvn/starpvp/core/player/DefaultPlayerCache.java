@@ -3,13 +3,12 @@ package com.github.tezvn.starpvp.core.player;
 import com.github.tezvn.starpvp.api.SPPlugin;
 import com.github.tezvn.starpvp.api.player.PlayerCache;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
-import com.github.tezvn.starpvp.api.player.SPPlayer;
 import com.github.tezvn.starpvp.core.utils.time.TimeUtils;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,7 +21,7 @@ public class DefaultPlayerCache extends BukkitRunnable implements PlayerCache {
 
     private final ExecutorService pool = Executors.newFixedThreadPool(10);
 
-    private final List<UUID> cachePlayers = Lists.newArrayList();
+    private final Set<UUID> cachePlayers = Sets.newHashSet();
 
     private long lastCache;
 
@@ -32,11 +31,14 @@ public class DefaultPlayerCache extends BukkitRunnable implements PlayerCache {
         long period = TimeUtils.newInstance().add(getPeriod()).getDuration()/1000*20;
         this.runTaskTimerAsynchronously(plugin, period, period);
         this.lastCache = TimeUtils.newInstance().getNewTime();
+        System.out.println(cachePlayers.size());
     }
 
     @Override
     public void run() {
+        System.out.println(cachePlayers.size());
         cache();
+        clean();
         this.lastCache = TimeUtils.newInstance().getNewTime();
     }
 
@@ -77,6 +79,17 @@ public class DefaultPlayerCache extends BukkitRunnable implements PlayerCache {
     }
 
     @Override
+    public void clean() {
+        clean(false);
+    }
+
+    @Override
+    public void clean(boolean cache) {
+        if(cache) cache();
+        this.cachePlayers.clear();
+    }
+
+    @Override
     public long getLastCacheTime() {
         return this.lastCache;
     }
@@ -92,7 +105,6 @@ public class DefaultPlayerCache extends BukkitRunnable implements PlayerCache {
         if(cachePlayers.isEmpty()) return;
         cachePlayers.forEach(u -> pool.submit(() -> playerManager.saveToDatabase(u)));
         plugin.getLogger().info("Cached " + cachePlayers.size() + " players data to database!");
-        this.cachePlayers.clear();
     }
 
     private String getPeriod() {

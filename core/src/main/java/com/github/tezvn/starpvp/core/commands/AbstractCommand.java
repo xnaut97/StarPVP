@@ -594,7 +594,7 @@ public abstract class AbstractCommand<T extends Plugin> extends BukkitCommand {
                         "/" + handle.getName() + " help " + (page - 1),
                         "&7Previous page");
                 TextComponent nextPage = createClickableButton("&e&l»",
-                        "/" + handle.getName() + " help " + (page + 1),
+                        "/" + handle.getName() + " help " + (page + 2),
                         "&7Next page");
                 TextComponent pageInfo = createClickableButton(" &e&l" + (page + 1) + " ",
                         null, "&7You're in page " + (page + 1));

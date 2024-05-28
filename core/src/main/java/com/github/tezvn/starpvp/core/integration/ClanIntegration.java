@@ -10,7 +10,7 @@ public class ClanIntegration {
 
     public static ClanData getClan(Player player) {
         if(!isHooked()) return null;
-        return JavaPlugin.getPlugin(Clans.class).getPlayerAPI().getPlayerClan(player.getUniqueId());
+        return JavaPlugin.getPlugin(Clans.class).getPlayerAPI().getPlayerClan(player.getUniqueId()).orElse(null);
     }
 
     public static boolean inSameClan(Player player, Player other) {

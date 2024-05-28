@@ -34,6 +34,10 @@ public interface PlayerCache {
      */
     void force();
 
+    void clean();
+
+    void clean(boolean cache);
+
     /**
      * Get last time plugin cache data.
      */

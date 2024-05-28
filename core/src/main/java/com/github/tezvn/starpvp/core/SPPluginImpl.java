@@ -7,10 +7,7 @@ import com.github.tezvn.starpvp.api.player.PlayerCache;
 import com.github.tezvn.starpvp.api.player.PlayerManager;
 import com.github.tezvn.starpvp.api.rank.RankManager;
 import com.github.tezvn.starpvp.core.commands.CommandManager;
-import com.github.tezvn.starpvp.core.log.BaseLog;
-import com.github.tezvn.starpvp.core.log.LogType;
-import com.github.tezvn.starpvp.core.log.PlayerLog;
-import com.github.tezvn.starpvp.core.log.TeamLog;
+import com.github.tezvn.starpvp.core.log.*;
 import com.github.tezvn.starpvp.core.player.DefaultPlayerCache;
 import com.github.tezvn.starpvp.core.player.PlayerManagerImpl;
 import com.github.tezvn.starpvp.core.rank.RankManagerImpl;
@@ -55,7 +52,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         setupConfig();
         setupDatabase();
         registerLog();
-        this.playerCache = new DefaultPlayerCache(this);
+//        this.playerCache = new DefaultPlayerCache(this);
         this.rankManager = new RankManagerImpl(this);
         this.playerManager = new PlayerManagerImpl(this);
         this.commandManager = new CommandManager(this);
@@ -69,6 +66,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
         if(this.expansion != null) this.expansion.unregister();
         if (this.document != null) this.document = null;
         if (this.commandManager != null) this.commandManager.unregister();
+        if(this.playerCache != null) this.playerCache.clean(true);
     }
 
     @Override
@@ -98,6 +96,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
     @Override
     public void reload() {
         if(this.rankManager != null) this.rankManager.reload();
+        if(this.playerManager != null) this.playerManager.reload();
         if(this.document != null) {
             try {
                 this.document.reload();
@@ -143,6 +142,7 @@ public class SPPluginImpl extends JavaPlugin implements SPPlugin {
             BaseLog log = null;
             switch (type) {
                 case PLAYER -> log = new PlayerLog(this);
+                case PENALTY -> log = new PenaltyLog(this);
                 case TEAM -> log = new TeamLog(this);
             }
             this.logs.put(type, log);

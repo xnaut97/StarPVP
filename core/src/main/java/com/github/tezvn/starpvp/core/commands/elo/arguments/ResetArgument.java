@@ -66,7 +66,7 @@ public class ResetArgument extends EloArgument {
         if(args.length == 1)
             return getPlayerManager().getPlayers().stream()
                     .map(SPPlayer::getPlayerName)
-                    .filter(name -> name.startsWith(args[0]))
+                    .filter(name -> name != null && name.startsWith(args[0]))
                     .collect(Collectors.toList());
         return null;
     }

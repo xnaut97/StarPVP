@@ -94,7 +94,7 @@ public abstract class BaseLog {
         if (folder == null) {
             File folder = new File(plugin.getDataFolder() + "/logs/" + type.name().toLowerCase());
             boolean mkdirs = folder.mkdirs();
-            if (mkdirs) plugin.getLogger().warning("Created logs folder!");
+            if (mkdirs) plugin.getLogger().warning("Created '" + type.name().toLowerCase() + "' logs folder!");
             this.folder = folder;
         }
         return this.folder;
@@ -105,7 +105,7 @@ public abstract class BaseLog {
             File file = new File(folder + "/latest.log");
             if (!file.exists()) {
                 boolean create = file.createNewFile();
-                if (create) plugin.getLogger().warning("Created new latest log file!");
+                if (create) plugin.getLogger().warning("Created new '" + type.name().toLowerCase() + "'latest log file!");
             }
             this.latest = file;
         }

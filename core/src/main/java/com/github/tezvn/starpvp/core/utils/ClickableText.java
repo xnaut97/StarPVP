@@ -19,8 +19,14 @@ public class ClickableText {
     public ClickableText() {}
 
     public ClickableText(String text) {
+        this(text, true);
+    }
+
+    public ClickableText(String text, boolean replace) {
         Objects.requireNonNull(text);
-        this.text = text.replace("&", "§");
+        this.text = text;
+        if(replace)
+            this.text = text.replace("&", "§");
     }
 
     @SuppressWarnings("deprecation")

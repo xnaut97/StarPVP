@@ -28,4 +28,6 @@ public interface PlayerManager {
     @Nullable
     SPPlayer loadFromDatabase(UUID uuid);
 
+    void reload();
+
 }

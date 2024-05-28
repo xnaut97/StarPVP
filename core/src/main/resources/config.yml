@@ -1,4 +1,4 @@
-config-version: 13
+config-version: 14
 
 database:
   toggle: true
@@ -20,8 +20,6 @@ database:
     idle-timeout: 600000
     # Thời gian tối đa mà một kết nối có thể sống (30 phút)
     max-life-time: 1800000
-
-auto-cache: '5m'
 
 hell-elo:
   # Percent to activate Hell SP when death count is accounted
@@ -103,6 +101,10 @@ log:
   toggle: true
   # Dung lượng tối đa cho 1 file log, nếu đạt giới hạn sẽ tạo file mới
   max-file-size: 1 #megabytes
+
+leaderboard:
+  # Điều chỉnh số lượng nguoi chơi hien thi trong bang xep hang
+  list-amount: 10
 
 #Cấp bậc trong máy chủ
 #ranks:

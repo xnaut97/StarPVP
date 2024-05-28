@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.permissions.PermissionDefault;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ViewArgument extends EloArgument {
 
@@ -55,6 +56,11 @@ public class ViewArgument extends EloArgument {
 
     @Override
     public List<String> tabComplete(CommandSender sender, String[] args) {
+        if(args.length == 1)
+            return getPlayerManager().getPlayers().stream()
+                    .map(SPPlayer::getPlayerName)
+                    .filter(name -> name != null && name.startsWith(args[0]))
+                    .collect(Collectors.toList());
         return null;
     }
 }

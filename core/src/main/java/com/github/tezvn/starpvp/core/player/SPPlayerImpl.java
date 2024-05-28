@@ -22,7 +22,7 @@ public class SPPlayerImpl implements SPPlayer {
 
     private final UUID uniqueId;
 
-    private final String playerName;
+    private String playerName;
 
     private SPRank rank;
 
@@ -47,6 +47,10 @@ public class SPPlayerImpl implements SPPlayer {
     @Override
     public String getPlayerName() {
         return playerName;
+    }
+
+    public void setPlayerName(String playerName) {
+        this.playerName = playerName;
     }
 
     @Override
